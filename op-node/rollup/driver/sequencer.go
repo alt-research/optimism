@@ -4,15 +4,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/ethereum-optimism/optimism/op-node/rollup"
 	"github.com/ethereum-optimism/optimism/op-node/rollup/derive"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
+	"github.com/ipfs/go-datastore"
+	leveldb "github.com/ipfs/go-ds-leveldb"
 )
 
 type Downloader interface {
@@ -29,12 +35,109 @@ type SequencerMetrics interface {
 	RecordSequencerReset()
 }
 
+type TansactionFetcher interface {
+	FetchTransactions(ctx context.Context) ([]*types.Transaction, error)
+	Close() error
+}
+
+var _ TansactionFetcher = (*SquadClient)(nil)
+
+type SquadClient struct {
+	client    *rpc.Client
+	store     *leveldb.Datastore
+	ctx       context.Context
+	cancel    context.CancelFunc
+	savePoint *big.Int
+	step      uint64
+	wg        sync.WaitGroup
+}
+
+var SquadSavePointKey = datastore.NewKey("SQUAD_SAVE_POINT")
+
+type SquadFetchTransactionsResponse struct {
+	Txs       []hexutil.Bytes `json:"txs"`
+	NextBlock uint64          `json:"next_block"`
+}
+
+func NewSquadClient(ctx context.Context, endpoint string, storePath string, iterStep uint64) (*SquadClient, error) {
+	var (
+		c   = &SquadClient{step: iterStep}
+		err error
+	)
+	c.ctx, c.cancel = context.WithCancel(ctx)
+	c.client, err = rpc.Dial(endpoint)
+	if err != nil {
+		return nil, err
+	}
+	c.store, err = leveldb.NewDatastore(storePath, nil)
+	if err != nil {
+		return nil, err
+	}
+	c.savePoint = big.NewInt(0)
+	exists, err := c.store.Has(c.ctx, SquadSavePointKey)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		v, err := c.store.Get(c.ctx, SquadSavePointKey)
+		if err != nil {
+			return nil, err
+		}
+		c.savePoint.SetBytes(v)
+	}
+	c.wg.Add(1)
+	go func() {
+		defer c.wg.Done()
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-c.ctx.Done():
+				return
+			case <-ticker.C:
+				_ = c.store.Put(c.ctx, SquadSavePointKey, c.savePoint.Bytes())
+			}
+		}
+	}()
+	return c, nil
+}
+
+func (m *SquadClient) FetchTransactions(ctx context.Context) ([]*types.Transaction, error) {
+	var response SquadFetchTransactionsResponse
+	if err := m.client.CallContext(ctx, &response, "squad_fetchTransactions",
+		m.savePoint.Uint64(),
+		m.step,
+	); err != nil {
+		return nil, err
+	}
+	var txs []*types.Transaction
+	for _, b := range response.Txs {
+		tx := &types.Transaction{}
+		if err := tx.UnmarshalBinary(b); err != nil {
+			continue
+		}
+		txs = append(txs, tx)
+	}
+
+	if response.NextBlock > m.savePoint.Uint64() {
+		m.savePoint.SetUint64(response.NextBlock)
+	}
+	return txs, nil
+}
+
+func (m *SquadClient) Close() error {
+	m.cancel()
+	m.wg.Wait()
+	return m.store.Close()
+}
+
 // Sequencer implements the sequencing interface of the driver: it starts and completes block building jobs.
 type Sequencer struct {
 	log    log.Logger
 	config *rollup.Config
 
-	engine derive.ResettableEngineControl
+	engine    derive.ResettableEngineControl
+	txFetcher TansactionFetcher
 
 	attrBuilder      derive.AttributesBuilder
 	l1OriginSelector L1OriginSelectorIface
@@ -47,7 +150,7 @@ type Sequencer struct {
 	nextAction time.Time
 }
 
-func NewSequencer(log log.Logger, cfg *rollup.Config, engine derive.ResettableEngineControl, attributesBuilder derive.AttributesBuilder, l1OriginSelector L1OriginSelectorIface, metrics SequencerMetrics) *Sequencer {
+func NewSequencer(log log.Logger, cfg *rollup.Config, engine derive.ResettableEngineControl, attributesBuilder derive.AttributesBuilder, l1OriginSelector L1OriginSelectorIface, metrics SequencerMetrics, txFetcher TansactionFetcher) *Sequencer {
 	return &Sequencer{
 		log:              log,
 		config:           cfg,
@@ -56,6 +159,7 @@ func NewSequencer(log log.Logger, cfg *rollup.Config, engine derive.ResettableEn
 		attrBuilder:      attributesBuilder,
 		l1OriginSelector: l1OriginSelector,
 		metrics:          metrics,
+		txFetcher:        txFetcher,
 	}
 }
 
@@ -90,6 +194,23 @@ func (d *Sequencer) StartBuildingBlock(ctx context.Context) error {
 	// setting NoTxPool to true, which will cause the Sequencer to not include any transactions
 	// from the transaction pool.
 	attrs.NoTxPool = uint64(attrs.Timestamp) > l1Origin.Time+d.config.MaxSequencerDrift
+
+	if d.txFetcher != nil {
+		txs, err := d.txFetcher.FetchTransactions(fetchCtx)
+		if err != nil {
+			return err
+		}
+		for _, tx := range txs {
+			opaqueTx, _ := tx.MarshalBinary()
+			attrs.Transactions = append(attrs.Transactions, opaqueTx)
+			gasLimit := uint64(*attrs.GasLimit)
+			gasLimit += tx.Gas()
+			attrs.GasLimit = (*hexutil.Uint64)(&gasLimit)
+		}
+		if len(txs) > 0 {
+			attrs.NoTxPool = true
+		}
+	}
 
 	d.log.Debug("prepared attributes for new block",
 		"num", l2Head.Number+1, "time", uint64(attrs.Timestamp),

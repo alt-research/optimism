@@ -160,6 +160,28 @@ var (
 		Required: false,
 		Value:    time.Minute * 10,
 	}
+	SquadRPC = &cli.StringFlag{
+		Name:     "squad.rpc",
+		Usage:    "squad rpc endpoint to get sequenced txs.",
+		EnvVars:  prefixEnvVars("SQUAD_RPC"),
+		Required: false,
+		Value:    "",
+	}
+	SquadStorePath = &cli.StringFlag{
+		Name:     "squad.store-path",
+		Usage:    "squad store path to store the save point.",
+		EnvVars:  prefixEnvVars("SQUAD_STORE_PATH"),
+		Required: false,
+		Value:    "",
+	}
+
+	SquadIterationStep = &cli.Uint64Flag{
+		Name:     "squad.iter-step",
+		Usage:    "squad iteration step(block number) for fetch transactions.",
+		EnvVars:  prefixEnvVars("SQUAD_ITER_STEP"),
+		Required: false,
+		Value:    1,
+	}
 	MetricsEnabledFlag = &cli.BoolFlag{
 		Name:    "metrics.enabled",
 		Usage:   "Enable the metrics server",
@@ -311,6 +333,9 @@ var optionalFlags = []cli.Flag{
 	RollupLoadProtocolVersions,
 	CanyonOverrideFlag,
 	L1RethDBPath,
+	SquadRPC,
+	SquadStorePath,
+	SquadIterationStep,
 }
 
 // Flags contains the list of configuration options available to the binary.

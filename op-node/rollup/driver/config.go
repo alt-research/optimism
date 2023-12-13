@@ -20,4 +20,13 @@ type Config struct {
 	// SequencerMaxSafeLag is the maximum number of L2 blocks for restricting the distance between L2 safe and unsafe.
 	// Disabled if 0.
 	SequencerMaxSafeLag uint64 `json:"sequencer_max_safe_lag"`
+
+	// SquadRPC is the remote sequencer rpc where we can get ordered txs from.
+	SquadRPC string `json:"squad_rpc"`
+
+	// SquadStorePath is database path to store the tx fetching progress.
+	SquadStorePath string `json:"squad_store_path"`
+
+	// SquadIterationStep is the step length(block number) when fetching txs.
+	SquadIterationStep uint64 `json:"squad_iteration_step"`
 }

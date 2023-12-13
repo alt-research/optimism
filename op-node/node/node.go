@@ -35,6 +35,8 @@ type OpNode struct {
 	appVersion string
 	metrics    *metrics.Metrics
 
+	txFetcher driver.TansactionFetcher // remote transaction fetcher for sequencer
+
 	l1HeadsSub     ethereum.Subscription // Subscription to get L1 heads (automatically re-subscribes on error)
 	l1SafeSub      ethereum.Subscription // Subscription to get L1 safe blocks, a.k.a. justified data (polling)
 	l1FinalizedSub ethereum.Subscription // Subscription to get L1 safe blocks, a.k.a. justified data (polling)
@@ -304,7 +306,13 @@ func (n *OpNode) initL2(ctx context.Context, cfg *Config, snapshotLog log.Logger
 		return err
 	}
 
-	n.l2Driver = driver.NewDriver(&cfg.Driver, &cfg.Rollup, n.l2Source, n.l1Source, n, n, n.log, snapshotLog, n.metrics, cfg.ConfigPersistence, &cfg.Sync)
+	if cfg.Driver.SquadRPC != "" {
+		if n.txFetcher, err = driver.NewSquadClient(ctx, cfg.Driver.SquadRPC, cfg.Driver.SquadStorePath, cfg.Driver.SquadIterationStep); err != nil {
+			return fmt.Errorf("failed to create squad client: %w", err)
+		}
+	}
+
+	n.l2Driver = driver.NewDriver(&cfg.Driver, &cfg.Rollup, n.l2Source, n.l1Source, n, n, n.log, snapshotLog, n.metrics, cfg.ConfigPersistence, &cfg.Sync, n.txFetcher)
 
 	return nil
 }
@@ -594,6 +602,13 @@ func (n *OpNode) Stop(ctx context.Context) error {
 			if err := n.rpcSync.Close(); err != nil {
 				result = multierror.Append(result, fmt.Errorf("failed to close L2 engine backup sync client cleanly: %w", err))
 			}
+		}
+	}
+
+	// stop tx fetcher
+	if n.txFetcher != nil {
+		if err := n.txFetcher.Close(); err != nil {
+			result = multierror.Append(result, fmt.Errorf("failed to close transaction fetcher cleanly: %w", err))
 		}
 	}
 

@@ -182,6 +182,9 @@ func NewDriverConfig(ctx *cli.Context) *driver.Config {
 		SequencerEnabled:    ctx.Bool(flags.SequencerEnabledFlag.Name),
 		SequencerStopped:    ctx.Bool(flags.SequencerStoppedFlag.Name),
 		SequencerMaxSafeLag: ctx.Uint64(flags.SequencerMaxSafeLagFlag.Name),
+		SquadRPC:            ctx.String(flags.SquadRPC.Name),
+		SquadStorePath:      ctx.String(flags.SquadStorePath.Name),
+		SquadIterationStep:  ctx.Uint64(flags.SquadIterationStep.Name),
 	}
 }
 
