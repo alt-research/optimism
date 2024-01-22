@@ -14,10 +14,13 @@ import (
 	"github.com/ethereum-optimism/optimism/op-node/eth"
 	"github.com/ethereum-optimism/optimism/op-node/rollup/derive"
 	opclient "github.com/ethereum-optimism/optimism/op-service/client"
+	"github.com/ethereum-optimism/optimism/op-service/da"
+	"github.com/ethereum-optimism/optimism/op-service/pb/calldata"
 	"github.com/ethereum-optimism/optimism/op-service/txmgr"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"google.golang.org/protobuf/proto"
 )
 
 // BatchSubmitter encapsulates a service responsible for submitting L2 tx
@@ -382,6 +385,19 @@ func (l *BatchSubmitter) publishTxToL1(ctx context.Context, queue *txmgr.Queue[t
 func (l *BatchSubmitter) sendTransaction(txdata txData, queue *txmgr.Queue[txData], receiptsCh chan txmgr.TxReceipt[txData]) {
 	// Do the gas estimation offline. A value of 0 will cause the [txmgr] to estimate the gas limit.
 	data := txdata.Bytes()
+	cdata, err := da.Put(context.Background(), data)
+	if err != nil {
+		l.log.Info("failed to send data to DA, falling back to send raw tx data to l1", "err", err)
+		err = nil
+		cdata = &calldata.Calldata{
+			Value: &calldata.Calldata_Raw{
+				Raw: txdata.Bytes(),
+			},
+		}
+	} else {
+		log.Info("successfully send data from DA, sending ref to l1 now")
+	}
+	data, _ = proto.Marshal(cdata)
 	intrinsicGas, err := core.IntrinsicGas(data, nil, false, true, true, false)
 	if err != nil {
 		l.log.Error("Failed to calculate intrinsic gas", "error", err)
