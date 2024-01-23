@@ -1,8 +1,7 @@
 name: Build OP Stack
 on:
   push:
-    branches:
-      - 'ci/build-op-stack'
+    tags: ["*"]
 
 jobs:
   docker:
