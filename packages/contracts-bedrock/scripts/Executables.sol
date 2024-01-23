@@ -6,6 +6,7 @@ pragma solidity ^0.8.0;
 ///         need to be used.
 library Executables {
     string internal constant bash = "bash";
+    string internal constant sh = "sh";
     string internal constant jq = "jq";
     string internal constant forge = "forge";
 }

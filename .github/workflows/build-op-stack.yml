@@ -1,0 +1,70 @@
+name: Build OP Stack
+on:
+  push:
+    branches:
+      - 'ci/build-op-stack'
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: build and push l2
+            image: optimism-l2
+            dockerfile: ops-bedrock/Dockerfile.l2
+            context: ./ops-bedrock
+            buildargs: ''
+          - name: build and push op-node
+            image: optimism-node
+            dockerfile: op-node/Dockerfile
+            context: .
+            buildargs: '--build-arg BUILDPLATFORM=linux/amd64 --build-arg TARGETOS=linux --build-arg TARGETARCH=amd64'
+          - name: build and push op-proposer
+            image: optimism-proposer
+            dockerfile: op-proposer/Dockerfile
+            context: .
+            buildargs: '--build-arg BUILDPLATFORM=linux/amd64 --build-arg TARGETOS=linux --build-arg TARGETARCH=amd64'
+          - name: build and push op-batcher
+            image: optimism-batcher
+            dockerfile: op-batcher/Dockerfile
+            context: .
+            buildargs: '--build-arg BUILDPLATFORM=linux/amd64 --build-arg TARGETOS=linux --build-arg TARGETARCH=amd64'
+          # - name: build and push stateviz
+          #   image: optimism-stateviz
+          #   dockerfile: ops-bedrock/Dockerfile.stateviz
+          #   context: .
+          #   buildargs: ""
+          # - name: build and push contracts
+          #   image: optimism-contracts
+          #   dockerfile: Dockerfile.contracts-bedrock
+          #   context: .
+          #   buildargs: ""
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: "true"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.ECR_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.ECR_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: ${{ matrix.name }}
+        uses: docker/build-push-action@v4
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: ${{ secrets.ECR_REGISTRY }}/${{ matrix.image }}:${{ github.sha }} , ${{ secrets.ECR_REGISTRY }}/${{ matrix.image }}:latest
+          file: ${{ matrix.dockerfile }}
+          provenance: false

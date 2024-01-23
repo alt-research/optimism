@@ -1,0 +1,31 @@
+FROM node:18.15.0-slim AS builder
+
+WORKDIR /app
+
+COPY . ./optimism
+
+SHELL ["/bin/bash", "-c"]
+
+RUN apt-get update && apt-get install curl git -y
+
+RUN curl -L https://foundry.paradigm.xyz | bash \
+    && source /root/.bashrc \
+    && cd /app/optimism/packages/contracts-bedrock \
+    && foundryup \
+    && forge install \
+    && npm install -g pnpm \
+    && pnpm install \
+    && mv /app/optimism/packages/contracts-bedrock/* /app \
+    && rm -fr /app/optimism
+
+ENV PATH="${PATH}:/root/.foundry/bin"
+
+FROM ghcr.io/foundry-rs/foundry
+
+WORKDIR /app
+COPY --from=builder /app ./
+
+RUN apk update && apk add jq
+
+# Force compilation of the contracts
+RUN forge script scripts/Deploy.s.sol:Deploy --skip-simulation
