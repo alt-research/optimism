@@ -14,7 +14,7 @@
     "build": "npx nx build:contracts",
     "prebuild:contracts": "./scripts/verify-foundry-install.sh",
     "build:contracts": "pnpm build:forge",
-    "build:forge": "forge build",
+    "build:forge": "forge build --force",
     "build:differential": "go build -o ./scripts/differential-testing/differential-testing ./scripts/differential-testing",
     "build:fuzz": "(cd test-case-generator && go build ./cmd/fuzz.go)",
     "autogen:invariant-docs": "ts-node scripts/invariant-doc-gen.ts",
