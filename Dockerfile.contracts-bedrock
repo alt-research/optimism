@@ -38,6 +38,9 @@ RUN cd /app/optimism \
     && pnpm build
 
 RUN cd /app/optimism/op-bindings \
+    && go get -u github.com/ethereum/go-ethereum \
+    && cd $GOPATH/src/github.com/ethereum/go-ethereum/ \
+    && make devtools \
     && make all
 
 RUN cd /app/optimism/packages/contracts-bedrock \
