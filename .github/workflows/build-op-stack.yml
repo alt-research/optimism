@@ -11,26 +11,26 @@ jobs:
     strategy:
       matrix:
         include:
-          - name: build and push l2
-            image: optimism-l2
-            dockerfile: ops-bedrock/Dockerfile.l2
-            context: ./ops-bedrock
-            buildargs: ''
-          - name: build and push op-node
-            image: optimism-node
-            dockerfile: op-node/Dockerfile
-            context: .
-            buildargs: '--build-arg BUILDPLATFORM=linux/amd64 --build-arg TARGETOS=linux --build-arg TARGETARCH=amd64'
-          - name: build and push op-proposer
-            image: optimism-proposer
-            dockerfile: op-proposer/Dockerfile
-            context: .
-            buildargs: '--build-arg BUILDPLATFORM=linux/amd64 --build-arg TARGETOS=linux --build-arg TARGETARCH=amd64'
-          - name: build and push op-batcher
-            image: optimism-batcher
-            dockerfile: op-batcher/Dockerfile
-            context: .
-            buildargs: '--build-arg BUILDPLATFORM=linux/amd64 --build-arg TARGETOS=linux --build-arg TARGETARCH=amd64'
+          # - name: build and push l2
+          #   image: optimism-l2
+          #   dockerfile: ops-bedrock/Dockerfile.l2
+          #   context: ./ops-bedrock
+          #   buildargs: ''
+          # - name: build and push op-node
+          #   image: optimism-node
+          #   dockerfile: op-node/Dockerfile
+          #   context: .
+          #   buildargs: '--build-arg BUILDPLATFORM=linux/amd64 --build-arg TARGETOS=linux --build-arg TARGETARCH=amd64'
+          # - name: build and push op-proposer
+          #   image: optimism-proposer
+          #   dockerfile: op-proposer/Dockerfile
+          #   context: .
+          #   buildargs: '--build-arg BUILDPLATFORM=linux/amd64 --build-arg TARGETOS=linux --build-arg TARGETARCH=amd64'
+          # - name: build and push op-batcher
+          #   image: optimism-batcher
+          #   dockerfile: op-batcher/Dockerfile
+          #   context: .
+          #   buildargs: '--build-arg BUILDPLATFORM=linux/amd64 --build-arg TARGETOS=linux --build-arg TARGETARCH=amd64'
           # - name: build and push stateviz
           #   image: optimism-stateviz
           #   dockerfile: ops-bedrock/Dockerfile.stateviz
@@ -40,7 +40,7 @@ jobs:
             image: optimism-contracts
             dockerfile: Dockerfile.contracts-bedrock
             context: .
-            buildargs: ""
+            buildargs: '--build-arg BUILDPLATFORM=linux/amd64 --build-arg TARGETOS=linux --build-arg TARGETARCH=amd64 --no-cache'
     steps:
       - name: Checkout
         uses: actions/checkout@v3
