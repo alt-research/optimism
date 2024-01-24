@@ -110,7 +110,7 @@ contract DeployConfig is Script {
         if (_l2OutputOracleStartingTimestamp < 0) {
             bytes32 tag = l1StartingBlockTag();
             string[] memory cmd = new string[](3);
-            cmd[0] = Executables.sh;
+            cmd[0] = Executables.bash;
             cmd[1] = "-c";
             cmd[2] = string.concat("cast block ", vm.toString(tag), " --json | ", Executables.jq, " .timestamp");
             bytes memory res = vm.ffi(cmd);
@@ -121,7 +121,7 @@ contract DeployConfig is Script {
 
     function _getBlockByTag(string memory _tag) internal returns (bytes32) {
         string[] memory cmd = new string[](3);
-        cmd[0] = Executables.sh;
+        cmd[0] = Executables.bash;
         cmd[1] = "-c";
         cmd[2] = string.concat("cast block ", _tag, " --json | ", Executables.jq, " -r .hash");
         bytes memory res = vm.ffi(cmd);

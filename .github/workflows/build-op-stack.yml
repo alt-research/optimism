@@ -1,7 +1,9 @@
 name: Build OP Stack
 on:
   push:
-    tags: ["*"]
+    #tags: ["*"]
+    branches:
+      - "ci/build-op-stack"
 
 jobs:
   docker:
@@ -34,11 +36,11 @@ jobs:
           #   dockerfile: ops-bedrock/Dockerfile.stateviz
           #   context: .
           #   buildargs: ""
-          # - name: build and push contracts
-          #   image: optimism-contracts
-          #   dockerfile: Dockerfile.contracts-bedrock
-          #   context: .
-          #   buildargs: ""
+          - name: build and push contracts
+            image: optimism-contracts
+            dockerfile: Dockerfile.contracts-bedrock
+            context: .
+            buildargs: ""
     steps:
       - name: Checkout
         uses: actions/checkout@v3

@@ -233,7 +233,7 @@ abstract contract Deployer is Script {
     function _getTempDeployments() internal returns (Deployment[] memory) {
         string memory json = vm.readFile(tempDeploymentsPath);
         string[] memory cmd = new string[](3);
-        cmd[0] = Executables.sh;
+        cmd[0] = Executables.bash;
         cmd[1] = "-c";
         cmd[2] = string.concat("echo '", json, "' | ", Executables.jq, " 'keys'");
         bytes memory res = vm.ffi(cmd);
@@ -254,7 +254,7 @@ abstract contract Deployer is Script {
     /// @notice Returns the json of the deployment transaction given a contract address.
     function _getDeployTransactionByContractAddress(address _addr) internal returns (string memory) {
         string[] memory cmd = new string[](3);
-        cmd[0] = Executables.sh;
+        cmd[0] = Executables.bash;
         cmd[1] = "-c";
         cmd[2] = string.concat(Executables.jq, " -r '.transactions[] | select(.contractAddress == ", '"', vm.toString(_addr), '"', ") | select(.transactionType == ", '"CREATE"', ")' < ", deployPath);
         bytes memory res = vm.ffi(cmd);
@@ -264,7 +264,7 @@ abstract contract Deployer is Script {
     /// @notice Returns the constructor arguent of a deployment transaction given a transaction json.
     function getDeployTransactionConstructorArguments(string memory _transaction) internal returns (string[] memory) {
         string[] memory cmd = new string[](3);
-        cmd[0] = Executables.sh;
+        cmd[0] = Executables.bash;
         cmd[1] = "-c";
         cmd[2] = string.concat("echo '", _transaction, "' | ", Executables.jq, " -r '.arguments'");
         bytes memory res = vm.ffi(cmd);
@@ -286,7 +286,7 @@ abstract contract Deployer is Script {
     ///         file matches the name of the contract.
     function _getForgeArtifactPath(string memory _name) internal returns (string memory) {
         string[] memory cmd = new string[](3);
-        cmd[0] = Executables.sh;
+        cmd[0] = Executables.bash;
         cmd[1] = "-c";
         cmd[2] = string.concat(Executables.forge, " config --json | ", Executables.jq, " -r .out");
         bytes memory res = vm.ffi(cmd);
@@ -304,7 +304,7 @@ abstract contract Deployer is Script {
     /// @notice Returns the receipt of a deployment transaction.
     function _getDeployReceiptByContractAddress(address addr) internal returns (string memory) {
         string[] memory cmd = new string[](3);
-        cmd[0] = Executables.sh;
+        cmd[0] = Executables.bash;
         cmd[1] = "-c";
         cmd[2] = string.concat(Executables.jq, " -r '.receipts[] | select(.contractAddress == ", '"', vm.toString(addr), '"', ")' < ", deployPath);
         bytes memory res = vm.ffi(cmd);
@@ -315,7 +315,7 @@ abstract contract Deployer is Script {
     /// @notice Returns the devdoc for a deployed contract.
     function getDevDoc(string memory _name) internal returns (string memory) {
         string[] memory cmd = new string[](3);
-        cmd[0] = Executables.sh;
+        cmd[0] = Executables.bash;
         cmd[1] = "-c";
         cmd[2] = string.concat(Executables.jq, " -r '.devdoc' < ", _getForgeArtifactPath(_name));
         bytes memory res = vm.ffi(cmd);
@@ -325,7 +325,7 @@ abstract contract Deployer is Script {
     /// @notice Returns the storage layout for a deployed contract.
     function getStorageLayout(string memory _name) internal returns (string memory) {
         string[] memory cmd = new string[](3);
-        cmd[0] = Executables.sh;
+        cmd[0] = Executables.bash;
         cmd[1] = "-c";
         cmd[2] = string.concat(Executables.jq, " -r '.storageLayout' < ", _getForgeArtifactPath(_name));
         bytes memory res = vm.ffi(cmd);
@@ -335,7 +335,7 @@ abstract contract Deployer is Script {
     /// @notice Returns the abi for a deployed contract.
     function getAbi(string memory _name) internal returns (string memory) {
         string[] memory cmd = new string[](3);
-        cmd[0] = Executables.sh;
+        cmd[0] = Executables.bash;
         cmd[1] = "-c";
         cmd[2] = string.concat(Executables.jq, " -r '.abi' < ", _getForgeArtifactPath(_name));
         bytes memory res = vm.ffi(cmd);
@@ -345,7 +345,7 @@ abstract contract Deployer is Script {
     /// @notice Returns the userdoc for a deployed contract.
     function getUserDoc(string memory _name) internal returns (string memory) {
         string[] memory cmd = new string[](3);
-        cmd[0] = Executables.sh;
+        cmd[0] = Executables.bash;
         cmd[1] = "-c";
         cmd[2] = string.concat(Executables.jq, " -r '.userdoc' < ", _getForgeArtifactPath(_name));
         bytes memory res = vm.ffi(cmd);
@@ -355,7 +355,7 @@ abstract contract Deployer is Script {
     /// @notice
     function getMetadata(string memory _name) internal returns (string memory) {
         string[] memory cmd = new string[](3);
-        cmd[0] = Executables.sh;
+        cmd[0] = Executables.bash;
         cmd[1] = "-c";
         cmd[2] = string.concat(Executables.jq, " '.metadata | tostring' < ", _getForgeArtifactPath(_name));
         bytes memory res = vm.ffi(cmd);
