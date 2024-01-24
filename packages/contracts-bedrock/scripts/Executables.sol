@@ -5,7 +5,7 @@ pragma solidity ^0.8.0;
 ///         to have a single source of truth in case absolute paths
 ///         need to be used.
 library Executables {
-    string internal constant bash = "sh";
+    string internal constant bash = "bash";
     string internal constant jq = "jq";
     string internal constant forge = "forge";
 }
