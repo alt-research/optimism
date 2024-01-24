@@ -6,7 +6,8 @@ COPY . ./optimism
 
 SHELL ["/bin/bash", "-c"]
 
-RUN apt-get update && apt-get install -y \
+RUN add-apt-repository -y ppa:ethereum/ethereum \
+  && apt-get update && apt-get install -y \
   curl \
   jq \
   python3 \
