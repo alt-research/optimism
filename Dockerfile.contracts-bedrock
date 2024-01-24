@@ -23,10 +23,14 @@ RUN apt-get update && apt-get install -y \
   pkg-config \
   libusb-1.0-0-dev \
   libudev-dev \
-  golang-go \
   --no-install-recommends
 
-RUN go install golang.org/x/tools/gopls@latest
+RUN curl -OL https://golang.org/dl/go1.16.7.linux-amd64.tar.gz \
+    && tar -C /usr/local -xvf go1.16.7.linux-amd64.tar.gz
+
+ENV PATH="$PATH:/usr/local/go/bin"
+
+RUN go version
 
 RUN npm install -g pnpm
 
