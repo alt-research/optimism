@@ -34,11 +34,11 @@ RUN curl -L https://foundry.paradigm.xyz | bash \
 ENV PATH="${PATH}:/root/.foundry/bin"
 
 RUN cd /app/optimism \
-    && pnpm install \
+    && pnpm install --frozen-lockfile \
     && pnpm build
 
 RUN cd /app/optimism/packages/contracts-bedrock \
-    && pnpm install \
+    && pnpm install --frozen-lockfile \
     && pnpm build
 
 FROM ghcr.io/foundry-rs/foundry
