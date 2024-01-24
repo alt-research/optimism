@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y \
   gcc \
   musl-dev \
   bash \
+  ethereum \
   # the following 4 deps are needed for node-hid
   # which is a deep sub dependency of ethers to install
   # correctly
@@ -25,11 +26,7 @@ RUN apt-get update && apt-get install -y \
   libudev-dev \
   --no-install-recommends
 
-RUN curl -OL https://golang.org/dl/go1.20.linux-amd64.tar.gz \
-    && tar -C /usr/local -xvf go1.20.linux-amd64.tar.gz
-
 ENV PATH="$PATH:/usr/local/go/bin"
-ENV GOPATH="/app/gocode"
 
 RUN npm install -g pnpm
 
@@ -44,9 +41,6 @@ RUN cd /app/optimism \
     && pnpm build
 
 RUN cd /app/optimism/op-bindings \
-    && go get -u github.com/ethereum/go-ethereum \
-    && cd $GOPATH/src/github.com/ethereum/go-ethereum/ \
-    && make devtools \
     && make all
 
 RUN cd /app/optimism/packages/contracts-bedrock \
