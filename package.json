@@ -10,7 +10,7 @@
   },
   "scripts": {
     "clean": "npx nx run-many --target=clean",
-    "build": "npx nx run-many --target=build",
+    "build": "npx nx run-many --skip-nx-cache --target=build",
     "test": "npx nx run-many --target=test",
     "lint": "npx nx run-many --target=lint",
     "test:coverage": "npx nx run-many --target=test:coverage",
