@@ -26,6 +26,8 @@ RUN apt-get update && apt-get install -y \
   golang-go \
   --no-install-recommends
 
+RUN go install golang.org/x/tools/gopls@latest
+
 RUN npm install -g pnpm
 
 RUN curl -L https://foundry.paradigm.xyz | bash \
