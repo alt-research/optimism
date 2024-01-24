@@ -37,6 +37,9 @@ RUN cd /app/optimism \
     && pnpm install --frozen-lockfile \
     && pnpm build
 
+RUN cd /app/optimism/op-bindings \
+    && make all
+
 RUN cd /app/optimism/packages/contracts-bedrock \
     && pnpm install --frozen-lockfile \
     && pnpm build
