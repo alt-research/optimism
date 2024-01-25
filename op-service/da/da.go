@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	env "github.com/Netflix/go-env"
+	"github.com/ethereum-optimism/optimism/op-service/da/avail"
 	"github.com/ethereum-optimism/optimism/op-service/da/celestia"
 	"github.com/ethereum-optimism/optimism/op-service/da/eigenda"
 	"github.com/ethereum-optimism/optimism/op-service/da/pb/calldata"
@@ -23,6 +24,7 @@ type Config struct {
 	s3.S3Config
 	// config for celestia
 	celestia.CelestiaConfig
+	avail.AvailConfig
 }
 
 func init() {
@@ -32,17 +34,18 @@ func init() {
 	}
 	switch config.DAName {
 	case "eigenda":
-		if err = eigenda.Init(&config.EigenDAConfig); err != nil {
-			panic(err)
-		}
+		err = eigenda.Init(&config.EigenDAConfig)
 	case "s3":
-		if err = s3.Init(&config.S3Config); err != nil {
-			panic(err)
-		}
+		err = s3.Init(&config.S3Config)
 	case "celestia":
-		if err = celestia.Init(&config.CelestiaConfig); err != nil {
-			panic(err)
-		}
+		err = celestia.Init(&config.CelestiaConfig)
+	case "avail":
+		err = avail.Init(&config.AvailConfig)
+	default:
+		panic("unspecified DA")
+	}
+	if err != nil {
+		panic(err)
 	}
 }
 
@@ -58,6 +61,8 @@ func Put(ctx context.Context, data []byte) (*calldata.Calldata, error) {
 		c, err = s3.Put(ctx, data)
 	case "celestia":
 		c, err = celestia.Put(ctx, data)
+	case "avail":
+		c, err = avail.Put(ctx, data)
 	default:
 		return nil, fmt.Errorf("unspecified DA")
 	}

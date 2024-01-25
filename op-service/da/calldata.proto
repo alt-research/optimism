@@ -11,7 +11,7 @@ message Calldata {
     EigenDARef eigenda_ref = 2;
     Digest Digest = 3;
     CelestiaRef celestia_ref = 4;
-    AnvilRef anvil_ref = 5;
+    AvailRef avail_ref = 5;
   }
 }
 
@@ -22,7 +22,7 @@ message EigenDARef {
 
 message CelestiaRef { bytes id = 1; }
 
-message AnvilRef {
+message AvailRef {
   string block_hash = 1;
   string sender = 2;
   int64 nonce = 3;

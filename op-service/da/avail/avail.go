@@ -1,4 +1,4 @@
-package celestia
+package avail
 
 import (
 	"context"
@@ -16,12 +16,12 @@ import (
 
 var (
 	api         *gsrpc.SubstrateAPI
-	conf        *AnvilConfig
+	conf        *AvailConfig
 	keyringPair signature.KeyringPair
 
 	metrics = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: "da",
-		Subsystem: "anvil",
+		Subsystem: "avail",
 		Name:      "operation",
 	}, []string{
 		"kind",
@@ -44,14 +44,14 @@ func GetAccountNonce(accountNonce uint32) uint32 {
 	return localNonce
 }
 
-type AnvilConfig struct {
-	Seed         string        `env:"ANVIL_SEED"`
-	ApiURL       string        `env:"ANVIL_APIURL"`
-	AppID        int           `env:"ANVIL_APPID"`
-	WriteTimeout time.Duration `env:"ANVIL_WRITETIMEOUT"`
+type AvailConfig struct {
+	Seed         string        `env:"AVAIL_SEED"`
+	ApiURL       string        `env:"AVAIL_APIURL"`
+	AppID        int           `env:"AVAIL_APPID"`
+	WriteTimeout time.Duration `env:"AVAIL_WRITETIMEOUT"`
 }
 
-func (c AnvilConfig) sanitize() error {
+func (c AvailConfig) sanitize() error {
 	if c.Seed == "" {
 		return fmt.Errorf("invalid seed")
 	}
@@ -64,7 +64,7 @@ func (c AnvilConfig) sanitize() error {
 	return nil
 }
 
-func Init(c *AnvilConfig) error {
+func Init(c *AvailConfig) error {
 	err := c.sanitize()
 	if err != nil {
 		return err
@@ -113,7 +113,7 @@ func Put(ctx context.Context, data []byte) (*calldata.Calldata, error) {
 	}
 	if !ok {
 		metrics.WithLabelValues(kindPut, stateFailure).Inc()
-		return nil, fmt.Errorf("anvil account not found")
+		return nil, fmt.Errorf("avail account not found")
 	}
 	nonce := GetAccountNonce(uint32(accountInfo.Nonce))
 
@@ -146,8 +146,8 @@ func Put(ctx context.Context, data []byte) (*calldata.Calldata, error) {
 			if status.IsFinalized {
 				metrics.WithLabelValues(kindPut, stateSuccess).Inc()
 				return &calldata.Calldata{
-					Value: &calldata.Calldata_AnvilRef{
-						AnvilRef: &calldata.AnvilRef{
+					Value: &calldata.Calldata_AvailRef{
+						AvailRef: &calldata.AvailRef{
 							BlockHash: status.AsFinalized.Hex(),
 							Sender:    keyringPair.Address,
 							Nonce:     o.Nonce.Int64(),
@@ -157,12 +157,12 @@ func Put(ctx context.Context, data []byte) (*calldata.Calldata, error) {
 			}
 		case <-timeout:
 			metrics.WithLabelValues(kindPut, stateFailure).Inc()
-			return nil, fmt.Errorf("write anvil timeout")
+			return nil, fmt.Errorf("write avail timeout")
 		}
 	}
 }
 
-func Get(ctx context.Context, d *calldata.AnvilRef) ([]byte, error) {
+func Get(ctx context.Context, d *calldata.AvailRef) ([]byte, error) {
 	blockHash, err := types.NewHashFromHexString(d.BlockHash)
 	if err != nil {
 		metrics.WithLabelValues(kindGet, stateFailure).Inc()
@@ -191,5 +191,5 @@ func Get(ctx context.Context, d *calldata.AnvilRef) ([]byte, error) {
 		}
 	}
 	metrics.WithLabelValues(kindGet, stateFailure).Inc()
-	return nil, fmt.Errorf("anvil data not found hash:%s sender:%s, nonce:%d", d.BlockHash, d.Sender, d.Nonce)
+	return nil, fmt.Errorf("avail data not found hash:%s sender:%s, nonce:%d", d.BlockHash, d.Sender, d.Nonce)
 }

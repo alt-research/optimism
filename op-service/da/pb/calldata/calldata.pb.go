@@ -32,7 +32,7 @@ type Calldata struct {
 	//	*Calldata_EigendaRef
 	//	*Calldata_Digest
 	//	*Calldata_CelestiaRef
-	//	*Calldata_AnvilRef
+	//	*Calldata_AvailRef
 	Value isCalldata_Value `protobuf_oneof:"value"`
 }
 
@@ -103,9 +103,9 @@ func (x *Calldata) GetCelestiaRef() *CelestiaRef {
 	return nil
 }
 
-func (x *Calldata) GetAnvilRef() *AnvilRef {
-	if x, ok := x.GetValue().(*Calldata_AnvilRef); ok {
-		return x.AnvilRef
+func (x *Calldata) GetAvailRef() *AvailRef {
+	if x, ok := x.GetValue().(*Calldata_AvailRef); ok {
+		return x.AvailRef
 	}
 	return nil
 }
@@ -130,8 +130,8 @@ type Calldata_CelestiaRef struct {
 	CelestiaRef *CelestiaRef `protobuf:"bytes,4,opt,name=celestia_ref,json=celestiaRef,proto3,oneof"`
 }
 
-type Calldata_AnvilRef struct {
-	AnvilRef *AnvilRef `protobuf:"bytes,5,opt,name=anvil_ref,json=anvilRef,proto3,oneof"`
+type Calldata_AvailRef struct {
+	AvailRef *AvailRef `protobuf:"bytes,5,opt,name=avail_ref,json=availRef,proto3,oneof"`
 }
 
 func (*Calldata_Raw) isCalldata_Value() {}
@@ -142,7 +142,7 @@ func (*Calldata_Digest) isCalldata_Value() {}
 
 func (*Calldata_CelestiaRef) isCalldata_Value() {}
 
-func (*Calldata_AnvilRef) isCalldata_Value() {}
+func (*Calldata_AvailRef) isCalldata_Value() {}
 
 type EigenDARef struct {
 	state         protoimpl.MessageState
@@ -246,7 +246,7 @@ func (x *CelestiaRef) GetId() []byte {
 	return nil
 }
 
-type AnvilRef struct {
+type AvailRef struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
@@ -256,8 +256,8 @@ type AnvilRef struct {
 	Nonce     int64  `protobuf:"varint,3,opt,name=nonce,proto3" json:"nonce,omitempty"`
 }
 
-func (x *AnvilRef) Reset() {
-	*x = AnvilRef{}
+func (x *AvailRef) Reset() {
+	*x = AvailRef{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_calldata_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -265,13 +265,13 @@ func (x *AnvilRef) Reset() {
 	}
 }
 
-func (x *AnvilRef) String() string {
+func (x *AvailRef) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*AnvilRef) ProtoMessage() {}
+func (*AvailRef) ProtoMessage() {}
 
-func (x *AnvilRef) ProtoReflect() protoreflect.Message {
+func (x *AvailRef) ProtoReflect() protoreflect.Message {
 	mi := &file_calldata_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -283,26 +283,26 @@ func (x *AnvilRef) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use AnvilRef.ProtoReflect.Descriptor instead.
-func (*AnvilRef) Descriptor() ([]byte, []int) {
+// Deprecated: Use AvailRef.ProtoReflect.Descriptor instead.
+func (*AvailRef) Descriptor() ([]byte, []int) {
 	return file_calldata_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *AnvilRef) GetBlockHash() string {
+func (x *AvailRef) GetBlockHash() string {
 	if x != nil {
 		return x.BlockHash
 	}
 	return ""
 }
 
-func (x *AnvilRef) GetSender() string {
+func (x *AvailRef) GetSender() string {
 	if x != nil {
 		return x.Sender
 	}
 	return ""
 }
 
-func (x *AnvilRef) GetNonce() int64 {
+func (x *AvailRef) GetNonce() int64 {
 	if x != nil {
 		return x.Nonce
 	}
@@ -373,9 +373,9 @@ var file_calldata_proto_rawDesc = []byte{
 	0x18, 0x04, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x15, 0x2e, 0x63, 0x61, 0x6c, 0x6c, 0x64, 0x61, 0x74,
 	0x61, 0x2e, 0x43, 0x65, 0x6c, 0x65, 0x73, 0x74, 0x69, 0x61, 0x52, 0x65, 0x66, 0x48, 0x00, 0x52,
 	0x0b, 0x63, 0x65, 0x6c, 0x65, 0x73, 0x74, 0x69, 0x61, 0x52, 0x65, 0x66, 0x12, 0x31, 0x0a, 0x09,
-	0x61, 0x6e, 0x76, 0x69, 0x6c, 0x5f, 0x72, 0x65, 0x66, 0x18, 0x05, 0x20, 0x01, 0x28, 0x0b, 0x32,
-	0x12, 0x2e, 0x63, 0x61, 0x6c, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x41, 0x6e, 0x76, 0x69, 0x6c,
-	0x52, 0x65, 0x66, 0x48, 0x00, 0x52, 0x08, 0x61, 0x6e, 0x76, 0x69, 0x6c, 0x52, 0x65, 0x66, 0x42,
+	0x61, 0x76, 0x61, 0x69, 0x6c, 0x5f, 0x72, 0x65, 0x66, 0x18, 0x05, 0x20, 0x01, 0x28, 0x0b, 0x32,
+	0x12, 0x2e, 0x63, 0x61, 0x6c, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x41, 0x76, 0x61, 0x69, 0x6c,
+	0x52, 0x65, 0x66, 0x48, 0x00, 0x52, 0x08, 0x61, 0x76, 0x61, 0x69, 0x6c, 0x52, 0x65, 0x66, 0x42,
 	0x07, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x22, 0x57, 0x0a, 0x0a, 0x45, 0x69, 0x67, 0x65,
 	0x6e, 0x44, 0x41, 0x52, 0x65, 0x66, 0x12, 0x2a, 0x0a, 0x11, 0x62, 0x61, 0x74, 0x63, 0x68, 0x5f,
 	0x68, 0x65, 0x61, 0x64, 0x65, 0x72, 0x5f, 0x68, 0x61, 0x73, 0x68, 0x18, 0x01, 0x20, 0x01, 0x28,
@@ -384,7 +384,7 @@ var file_calldata_proto_rawDesc = []byte{
 	0x18, 0x02, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x09, 0x62, 0x6c, 0x6f, 0x62, 0x49, 0x6e, 0x64, 0x65,
 	0x78, 0x22, 0x1d, 0x0a, 0x0b, 0x43, 0x65, 0x6c, 0x65, 0x73, 0x74, 0x69, 0x61, 0x52, 0x65, 0x66,
 	0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x02, 0x69, 0x64,
-	0x22, 0x57, 0x0a, 0x08, 0x41, 0x6e, 0x76, 0x69, 0x6c, 0x52, 0x65, 0x66, 0x12, 0x1d, 0x0a, 0x0a,
+	0x22, 0x57, 0x0a, 0x08, 0x41, 0x76, 0x61, 0x69, 0x6c, 0x52, 0x65, 0x66, 0x12, 0x1d, 0x0a, 0x0a,
 	0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x5f, 0x68, 0x61, 0x73, 0x68, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09,
 	0x52, 0x09, 0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x48, 0x61, 0x73, 0x68, 0x12, 0x16, 0x0a, 0x06, 0x73,
 	0x65, 0x6e, 0x64, 0x65, 0x72, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x73, 0x65, 0x6e,
@@ -413,14 +413,14 @@ var file_calldata_proto_goTypes = []interface{}{
 	(*Calldata)(nil),    // 0: calldata.Calldata
 	(*EigenDARef)(nil),  // 1: calldata.EigenDARef
 	(*CelestiaRef)(nil), // 2: calldata.CelestiaRef
-	(*AnvilRef)(nil),    // 3: calldata.AnvilRef
+	(*AvailRef)(nil),    // 3: calldata.AvailRef
 	(*Digest)(nil),      // 4: calldata.Digest
 }
 var file_calldata_proto_depIdxs = []int32{
 	1, // 0: calldata.Calldata.eigenda_ref:type_name -> calldata.EigenDARef
 	4, // 1: calldata.Calldata.Digest:type_name -> calldata.Digest
 	2, // 2: calldata.Calldata.celestia_ref:type_name -> calldata.CelestiaRef
-	3, // 3: calldata.Calldata.anvil_ref:type_name -> calldata.AnvilRef
+	3, // 3: calldata.Calldata.avail_ref:type_name -> calldata.AvailRef
 	4, // [4:4] is the sub-list for method output_type
 	4, // [4:4] is the sub-list for method input_type
 	4, // [4:4] is the sub-list for extension type_name
@@ -471,7 +471,7 @@ func file_calldata_proto_init() {
 			}
 		}
 		file_calldata_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*AnvilRef); i {
+			switch v := v.(*AvailRef); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -500,7 +500,7 @@ func file_calldata_proto_init() {
 		(*Calldata_EigendaRef)(nil),
 		(*Calldata_Digest)(nil),
 		(*Calldata_CelestiaRef)(nil),
-		(*Calldata_AnvilRef)(nil),
+		(*Calldata_AvailRef)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
