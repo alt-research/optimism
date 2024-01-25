@@ -10,9 +10,13 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/ethereum-optimism/optimism/op-node/rollup"
+	"github.com/ethereum-optimism/optimism/op-service/da"
+	"github.com/ethereum-optimism/optimism/op-service/da/pb/calldata"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
+	"github.com/ethereum-optimism/optimism/op-service/retry"
 )
 
 type DataIter interface {
@@ -78,9 +82,20 @@ func NewDataSource(ctx context.Context, log log.Logger, dsCfg DataSourceConfig, 
 			batcherAddr: batcherAddr,
 		}
 	} else {
+		data, err := DataFromEVMTransactions(dsCfg, batcherAddr, txs, log.New("origin", block))
+		if err != nil {
+			return &DataSource{
+				open:        false,
+				id:          block,
+				dsCfg:       dsCfg,
+				fetcher:     fetcher,
+				log:         log,
+				batcherAddr: batcherAddr,
+			}
+		}
 		return &DataSource{
 			open: true,
-			data: DataFromEVMTransactions(dsCfg, batcherAddr, txs, log.New("origin", block)),
+			data: data,
 		}
 	}
 }
@@ -92,7 +107,9 @@ func (ds *DataSource) Next(ctx context.Context) (eth.Data, error) {
 	if !ds.open {
 		if _, txs, err := ds.fetcher.InfoAndTxsByHash(ctx, ds.id.Hash); err == nil {
 			ds.open = true
-			ds.data = DataFromEVMTransactions(ds.dsCfg, ds.batcherAddr, txs, log.New("origin", ds.id))
+			if ds.data, err = DataFromEVMTransactions(ds.dsCfg, ds.batcherAddr, txs, log.New("origin", ds.id)); err != nil {
+				return nil, NewTemporaryError(fmt.Errorf("failed to open calldata source: %w", err))
+			}
 		} else if errors.Is(err, ethereum.NotFound) {
 			return nil, NewResetError(fmt.Errorf("failed to open calldata source: %w", err))
 		} else {
@@ -111,7 +128,7 @@ func (ds *DataSource) Next(ctx context.Context) (eth.Data, error) {
 // DataFromEVMTransactions filters all of the transactions and returns the calldata from transactions
 // that are sent to the batch inbox address from the batch sender address.
 // This will return an empty array if no valid transactions are found.
-func DataFromEVMTransactions(dsCfg DataSourceConfig, batcherAddr common.Address, txs types.Transactions, log log.Logger) []eth.Data {
+func DataFromEVMTransactions(dsCfg DataSourceConfig, batcherAddr common.Address, txs types.Transactions, log log.Logger) ([]eth.Data, error) {
 	var out []eth.Data
 	for j, tx := range txs {
 		if to := tx.To(); to != nil && *to == dsCfg.batchInboxAddress {
@@ -125,8 +142,33 @@ func DataFromEVMTransactions(dsCfg DataSourceConfig, batcherAddr common.Address,
 				log.Warn("tx in inbox with unauthorized submitter", "index", j, "txHash", tx.Hash(), "err", err)
 				continue // not an authorized batch submitter, ignore
 			}
+			c := calldata.Calldata{}
+			if err := proto.Unmarshal(tx.Data(), &c); err != nil {
+				out = append(out, tx.Data())
+				continue
+			}
+			switch c.Value.(type) {
+			case *calldata.Calldata_Raw:
+				out = append(out, tx.Data())
+				continue
+			default:
+				data, err := retry.Do(
+					context.Background(),
+					3,
+					retry.Exponential(),
+					func() ([]byte, error) {
+						return da.Get(context.Background(), &c)
+					},
+				)
+				if err != nil {
+					log.Error("failed to retrieve data from DA after 3 times retry", "err", err)
+					return nil, err
+				}
+				log.Info("successfully retrieve data from DA")
+				out = append(out, data)
+			}
 			out = append(out, tx.Data())
 		}
 	}
-	return out
+	return out, nil
 }
