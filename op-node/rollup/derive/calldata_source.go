@@ -147,27 +147,19 @@ func DataFromEVMTransactions(dsCfg DataSourceConfig, batcherAddr common.Address,
 				out = append(out, tx.Data())
 				continue
 			}
-			switch c.Value.(type) {
-			case *calldata.Calldata_Raw:
-				out = append(out, tx.Data())
-				continue
-			default:
-				data, err := retry.Do(
-					context.Background(),
-					3,
-					retry.Exponential(),
-					func() ([]byte, error) {
-						return da.Get(context.Background(), &c)
-					},
-				)
-				if err != nil {
-					log.Error("failed to retrieve data from DA after 3 times retry", "err", err)
-					return nil, err
-				}
-				log.Info("successfully retrieve data from DA")
-				out = append(out, data)
+			data, err := retry.Do(
+				context.Background(),
+				3,
+				retry.Exponential(),
+				func() ([]byte, error) {
+					return da.Get(context.Background(), &c)
+				},
+			)
+			if err != nil {
+				log.Error("failed to retrieve data from DA after 3 times retry", "err", err)
+				return nil, err
 			}
-			out = append(out, tx.Data())
+			out = append(out, data)
 		}
 	}
 	return out, nil
