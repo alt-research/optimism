@@ -197,6 +197,12 @@ func Get(ctx context.Context, log log.Logger, d *calldata.AvailRef) ([]byte, err
 				return nil, err
 			}
 			metrics.WithLabelValues(kindGet, stateSuccess).Inc()
+			log.Info(
+				"successfully get data from avail",
+				"blockHash", d.GetBlockHash(),
+				"sender", d.GetSender(),
+				"nonce", d.GetNonce(),
+			)
 			return data, nil
 		}
 	}

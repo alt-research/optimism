@@ -128,6 +128,10 @@ func Get(ctx context.Context, log log.Logger, d *calldata.Digest) ([]byte, error
 		metrics.WithLabelValues(kindGet, stateFailure).Inc()
 		return nil, err
 	}
+	log.Info(
+		"successfully get data from s3",
+		"digest", hex.EncodeToString(d.GetPayload()),
+	)
 	metrics.WithLabelValues(kindGet, stateSuccess).Inc()
 	return v, nil
 }

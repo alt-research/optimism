@@ -95,6 +95,11 @@ func Get(ctx context.Context, log log.Logger, ref *calldata.EigenDARef) ([]byte,
 		metrics.WithLabelValues(kindGet, stateFailure).Inc()
 		return nil, err
 	}
+	log.Info(
+		"successfully get data from eigenda",
+		"blobIndex", ref.GetBlobIndex(),
+		"headerHash", hex.EncodeToString(ref.GetBatchHeaderHash()),
+	)
 	metrics.WithLabelValues(kindPut, stateSuccess).Inc()
 	return reply.Data, nil
 }

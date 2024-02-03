@@ -94,6 +94,10 @@ func Get(ctx context.Context, log log.Logger, d *calldata.CelestiaRef) ([]byte, 
 		metrics.WithLabelValues(kindGet, stateFailure).Inc()
 		return nil, fmt.Errorf("retrieve data by id returned %d blobs, expected 1", len(bs))
 	}
+	log.Info(
+		"successfully get data from celestia",
+		"id", hex.EncodeToString(d.GetId()),
+	)
 	metrics.WithLabelValues(kindGet, stateSuccess).Inc()
 	return bs[0], nil
 }
