@@ -87,6 +87,7 @@ func Init(c *S3Config) error {
 }
 
 func Put(ctx context.Context, log log.Logger, data []byte) (*calldata.Calldata, error) {
+	log.Info("trying to put data to s3")
 	digest := crypto.Keccak256Hash(data)
 	key := hex.EncodeToString(digest.Bytes())
 

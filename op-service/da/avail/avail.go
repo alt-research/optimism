@@ -81,6 +81,7 @@ func Init(c *AvailConfig) error {
 }
 
 func Put(ctx context.Context, log log.Logger, data []byte) (*calldata.Calldata, error) {
+	log.Info("trying to put data to avail")
 	meta, err := api.RPC.State.GetMetadataLatest()
 	if err != nil {
 		metrics.WithLabelValues(kindPut, stateFailure).Inc()

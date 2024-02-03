@@ -105,6 +105,7 @@ func Get(ctx context.Context, log log.Logger, ref *calldata.EigenDARef) ([]byte,
 }
 
 func Put(ctx context.Context, log log.Logger, data []byte) (*calldata.Calldata, error) {
+	log.Info("trying to put data to eigenda")
 	disperseReq := &disperser.DisperseBlobRequest{
 		Data: data,
 		SecurityParams: []*disperser.SecurityParams{

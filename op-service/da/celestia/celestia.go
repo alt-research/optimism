@@ -58,6 +58,7 @@ func Init(c *CelestiaConfig) error {
 }
 
 func Put(ctx context.Context, log log.Logger, data []byte) (*calldata.Calldata, error) {
+	log.Info("trying to put data to celestia")
 	ids, _, err := client.Submit(ctx, [][]byte{data}, &da.SubmitOptions{
 		GasPrice:  -1,
 		Namespace: []byte(conf.Namespace),
