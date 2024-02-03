@@ -2,6 +2,7 @@ package proposer
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -389,10 +390,11 @@ func (l *L2OutputSubmitter) sendTransaction(ctx context.Context, output *eth.Out
 		if err != nil {
 			return err
 		}
+		l.Log.Info("proposing output", "txData", hex.EncodeToString(data))
 		receipt, err = l.Txmgr.Send(ctx, txmgr.TxCandidate{
 			TxData:   data,
 			To:       l.Cfg.L2OutputOracleAddr,
-			GasLimit: 0,
+			GasLimit: 100000,
 		})
 		if err != nil {
 			return err
