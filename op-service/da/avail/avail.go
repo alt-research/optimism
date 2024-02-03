@@ -71,11 +71,11 @@ func Init(c *AvailConfig) error {
 	if err != nil {
 		return err
 	}
+	conf = c
 	keyringPair, err = signature.KeyringPairFromSecret(conf.Seed, 42)
 	if err != nil {
 		return err
 	}
-	conf = c
 	api, err = gsrpc.NewSubstrateAPI(c.ApiURL)
 	return err
 }
