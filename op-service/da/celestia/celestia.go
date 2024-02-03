@@ -2,9 +2,11 @@ package celestia
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/ethereum-optimism/optimism/op-service/da/pb/calldata"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rollkit/go-da"
 	"github.com/rollkit/go-da/proxy"
@@ -55,7 +57,7 @@ func Init(c *CelestiaConfig) error {
 	return nil
 }
 
-func Put(ctx context.Context, data []byte) (*calldata.Calldata, error) {
+func Put(ctx context.Context, log log.Logger, data []byte) (*calldata.Calldata, error) {
 	ids, _, err := client.Submit(ctx, [][]byte{data}, &da.SubmitOptions{
 		GasPrice:  -1,
 		Namespace: []byte(conf.Namespace),
@@ -78,7 +80,11 @@ func Put(ctx context.Context, data []byte) (*calldata.Calldata, error) {
 	}, nil
 }
 
-func Get(ctx context.Context, d *calldata.CelestiaRef) ([]byte, error) {
+func Get(ctx context.Context, log log.Logger, d *calldata.CelestiaRef) ([]byte, error) {
+	log.Info(
+		"trying to get data from celestia",
+		"id", hex.EncodeToString(d.GetId()),
+	)
 	bs, err := client.Get(ctx, [][]byte{d.GetId()})
 	if err != nil {
 		metrics.WithLabelValues(kindGet, stateFailure).Inc()

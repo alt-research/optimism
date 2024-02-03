@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum-optimism/optimism/op-service/da/eigenda"
 	"github.com/ethereum-optimism/optimism/op-service/da/pb/calldata"
 	"github.com/ethereum-optimism/optimism/op-service/da/s3"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 var (
@@ -49,20 +50,20 @@ func init() {
 	}
 }
 
-func Put(ctx context.Context, data []byte) (*calldata.Calldata, error) {
+func Put(ctx context.Context, log log.Logger, data []byte) (*calldata.Calldata, error) {
 	var (
 		c   *calldata.Calldata
 		err error
 	)
 	switch config.DAName {
 	case "eigenda":
-		c, err = eigenda.Put(ctx, data)
+		c, err = eigenda.Put(ctx, log, data)
 	case "s3":
-		c, err = s3.Put(ctx, data)
+		c, err = s3.Put(ctx, log, data)
 	case "celestia":
-		c, err = celestia.Put(ctx, data)
+		c, err = celestia.Put(ctx, log, data)
 	case "avail":
-		c, err = avail.Put(ctx, data)
+		c, err = avail.Put(ctx, log, data)
 	default:
 		return nil, fmt.Errorf("unspecified DA")
 	}
@@ -72,19 +73,24 @@ func Put(ctx context.Context, data []byte) (*calldata.Calldata, error) {
 	return c, nil
 }
 
-func Get(ctx context.Context, data *calldata.Calldata) ([]byte, error) {
+func Get(ctx context.Context, log log.Logger, data *calldata.Calldata) ([]byte, error) {
 	var (
 		res []byte
 		err error
 	)
 	switch data.Value.(type) {
 	case *calldata.Calldata_EigendaRef:
-		res, err = eigenda.Get(ctx, data.GetEigendaRef())
+		res, err = eigenda.Get(ctx, log, data.GetEigendaRef())
 	case *calldata.Calldata_Digest:
-		res, err = s3.Get(ctx, data.GetDigest())
+		res, err = s3.Get(ctx, log, data.GetDigest())
 	case *calldata.Calldata_CelestiaRef:
-		res, err = celestia.Get(ctx, data.GetCelestiaRef())
+		res, err = celestia.Get(ctx, log, data.GetCelestiaRef())
+	case *calldata.Calldata_AvailRef:
+		res, err = avail.Get(ctx, log, data.GetAvailRef())
 	default:
+		log.Debug(
+			"da fallback to raw data",
+		)
 		return data.GetRaw(), nil
 	}
 	if err != nil {

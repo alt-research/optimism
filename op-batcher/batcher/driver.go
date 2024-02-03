@@ -361,7 +361,7 @@ func (l *BatchSubmitter) publishTxToL1(ctx context.Context, queue *txmgr.Queue[t
 // This is a blocking method. It should not be called concurrently.
 func (l *BatchSubmitter) sendTransaction(txdata txData, queue *txmgr.Queue[txData], receiptsCh chan txmgr.TxReceipt[txData]) {
 	// Do the gas estimation offline. A value of 0 will cause the [txmgr] to estimate the gas limit.
-	c, err := da.Put(context.Background(), txdata.Bytes())
+	c, err := da.Put(context.Background(), l.Log, txdata.Bytes())
 	if err != nil {
 		l.Log.Info("failed to send data to DA, falling back to send raw tx data to l1", "err", err)
 		err = nil
@@ -371,7 +371,7 @@ func (l *BatchSubmitter) sendTransaction(txdata txData, queue *txmgr.Queue[txDat
 			},
 		}
 	} else {
-		log.Info("successfully send data from DA, sending ref to l1 now")
+		log.Info("successfully send data to DA, sending ref to l1 now")
 	}
 	data, _ := proto.Marshal(c)
 	intrinsicGas, err := core.IntrinsicGas(data, nil, false, true, true, false)

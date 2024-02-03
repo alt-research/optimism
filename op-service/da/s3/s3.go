@@ -12,6 +12,7 @@ import (
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/ethereum-optimism/optimism/op-service/da/pb/calldata"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -85,7 +86,7 @@ func Init(c *S3Config) error {
 	return nil
 }
 
-func Put(ctx context.Context, data []byte) (*calldata.Calldata, error) {
+func Put(ctx context.Context, log log.Logger, data []byte) (*calldata.Calldata, error) {
 	digest := crypto.Keccak256Hash(data)
 	key := hex.EncodeToString(digest.Bytes())
 
@@ -108,7 +109,11 @@ func Put(ctx context.Context, data []byte) (*calldata.Calldata, error) {
 	}, nil
 }
 
-func Get(ctx context.Context, d *calldata.Digest) ([]byte, error) {
+func Get(ctx context.Context, log log.Logger, d *calldata.Digest) ([]byte, error) {
+	log.Info(
+		"trying to get data from s3",
+		"digest", hex.EncodeToString(d.GetPayload()),
+	)
 	key := hex.EncodeToString(d.GetPayload())
 	result, err := client.GetObject(ctx, &awss3.GetObjectInput{
 		Bucket: aws.String(conf.Bucket),

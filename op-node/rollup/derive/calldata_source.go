@@ -2,6 +2,7 @@ package derive
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -144,6 +145,7 @@ func DataFromEVMTransactions(dsCfg DataSourceConfig, batcherAddr common.Address,
 			}
 			c := calldata.Calldata{}
 			if err := proto.Unmarshal(tx.Data(), &c); err != nil {
+				log.Warn("tx in inbox is not a protobuf calldata, probably raw data", "index", j, "txHash", tx.Hash(), "txDataHex", hex.EncodeToString(tx.Data()))
 				out = append(out, tx.Data())
 				continue
 			}
@@ -152,7 +154,7 @@ func DataFromEVMTransactions(dsCfg DataSourceConfig, batcherAddr common.Address,
 				3,
 				retry.Exponential(),
 				func() ([]byte, error) {
-					return da.Get(context.Background(), &c)
+					return da.Get(context.Background(), log, &c)
 				},
 			)
 			if err != nil {

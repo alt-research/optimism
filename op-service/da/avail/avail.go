@@ -2,6 +2,7 @@ package avail
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types/codec"
 	"github.com/ethereum-optimism/optimism/op-service/da/pb/calldata"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/vedhavyas/go-subkey"
 )
@@ -78,7 +80,7 @@ func Init(c *AvailConfig) error {
 	return err
 }
 
-func Put(ctx context.Context, data []byte) (*calldata.Calldata, error) {
+func Put(ctx context.Context, log log.Logger, data []byte) (*calldata.Calldata, error) {
 	meta, err := api.RPC.State.GetMetadataLatest()
 	if err != nil {
 		metrics.WithLabelValues(kindPut, stateFailure).Inc()
@@ -155,14 +157,22 @@ func Put(ctx context.Context, data []byte) (*calldata.Calldata, error) {
 					},
 				}, nil
 			}
+			b, _ := json.Marshal(status)
+			log.Info("avail waiting for submit status", "status", string(b))
 		case <-timeout:
 			metrics.WithLabelValues(kindPut, stateFailure).Inc()
-			return nil, fmt.Errorf("write avail timeout")
+			return nil, fmt.Errorf("write avail submit status timeout")
 		}
 	}
 }
 
-func Get(ctx context.Context, d *calldata.AvailRef) ([]byte, error) {
+func Get(ctx context.Context, log log.Logger, d *calldata.AvailRef) ([]byte, error) {
+	log.Info(
+		"trying to get data from avail",
+		"blockHash", d.GetBlockHash(),
+		"sender", d.GetSender(),
+		"nonce", d.GetNonce(),
+	)
 	blockHash, err := types.NewHashFromHexString(d.BlockHash)
 	if err != nil {
 		metrics.WithLabelValues(kindGet, stateFailure).Inc()

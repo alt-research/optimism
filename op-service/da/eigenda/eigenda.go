@@ -4,12 +4,14 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/Layr-Labs/eigenda/api/grpc/disperser"
 	"github.com/ethereum-optimism/optimism/op-service/da/pb/calldata"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -79,7 +81,12 @@ func Init(c *EigenDAConfig) error {
 	return nil
 }
 
-func Get(ctx context.Context, ref *calldata.EigenDARef) ([]byte, error) {
+func Get(ctx context.Context, log log.Logger, ref *calldata.EigenDARef) ([]byte, error) {
+	log.Info(
+		"trying to get data from eigenda",
+		"blobIndex", ref.GetBlobIndex(),
+		"headerHash", hex.EncodeToString(ref.GetBatchHeaderHash()),
+	)
 	reply, err := client.RetrieveBlob(ctx, &disperser.RetrieveBlobRequest{
 		BatchHeaderHash: ref.GetBatchHeaderHash(),
 		BlobIndex:       ref.GetBlobIndex(),
@@ -92,7 +99,7 @@ func Get(ctx context.Context, ref *calldata.EigenDARef) ([]byte, error) {
 	return reply.Data, nil
 }
 
-func Put(ctx context.Context, data []byte) (*calldata.Calldata, error) {
+func Put(ctx context.Context, log log.Logger, data []byte) (*calldata.Calldata, error) {
 	disperseReq := &disperser.DisperseBlobRequest{
 		Data: data,
 		SecurityParams: []*disperser.SecurityParams{
@@ -119,11 +126,17 @@ func Put(ctx context.Context, data []byte) (*calldata.Calldata, error) {
 				RequestId: disperseRes.RequestId,
 			})
 			if err != nil {
+				log.Warn("failed to get blob status from eigenda, will retry", "error", err)
 				continue
 			}
 			switch statusReply.GetStatus() {
 			case disperser.BlobStatus_CONFIRMED, disperser.BlobStatus_FINALIZED:
 				metrics.WithLabelValues(kindPut, stateSuccess).Inc()
+				log.Debug(
+					"eigenda blob dispersal succeeded", "requestID", base64RequestID,
+					"blobIndex", statusReply.Info.BlobVerificationProof.BlobIndex,
+					"headerHash", hex.EncodeToString(statusReply.Info.BlobVerificationProof.BatchMetadata.BatchHeaderHash),
+				)
 				return &calldata.Calldata{
 					Value: &calldata.Calldata_EigendaRef{
 						EigendaRef: &calldata.EigenDARef{
