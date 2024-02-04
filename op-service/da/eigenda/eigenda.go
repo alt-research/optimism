@@ -138,8 +138,9 @@ func Put(ctx context.Context, log log.Logger, data []byte) (*calldata.Calldata, 
 			switch statusReply.GetStatus() {
 			case disperser.BlobStatus_CONFIRMED, disperser.BlobStatus_FINALIZED:
 				metrics.WithLabelValues(kindPut, stateSuccess).Inc()
-				log.Debug(
-					"eigenda blob dispersal succeeded", "requestID", base64RequestID,
+				log.Info(
+					"successfully put data to eigenda",
+					"requestID", base64RequestID,
 					"blobIndex", statusReply.Info.BlobVerificationProof.BlobIndex,
 					"headerHash", hex.EncodeToString(statusReply.Info.BlobVerificationProof.BatchMetadata.BatchHeaderHash),
 				)

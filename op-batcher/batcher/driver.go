@@ -363,7 +363,7 @@ func (l *BatchSubmitter) sendTransaction(txdata txData, queue *txmgr.Queue[txDat
 	// Do the gas estimation offline. A value of 0 will cause the [txmgr] to estimate the gas limit.
 	c, err := da.Put(context.Background(), l.Log, txdata.Bytes())
 	if err != nil {
-		l.Log.Info("failed to send data to DA, falling back to send raw tx data to l1", "err", err)
+		l.Log.Warn("failed to send data to DA, falling back to send raw tx data to l1", "err", err)
 		err = nil
 		c = &calldata.Calldata{
 			Value: &calldata.Calldata_Raw{

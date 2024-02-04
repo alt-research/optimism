@@ -100,6 +100,10 @@ func Put(ctx context.Context, log log.Logger, data []byte) (*calldata.Calldata, 
 		metrics.WithLabelValues(kindPut, stateFailure).Inc()
 		return nil, err
 	}
+	log.Info(
+		"successfully put data to s3",
+		"digest", key,
+	)
 	metrics.WithLabelValues(kindPut, stateSuccess).Inc()
 	return &calldata.Calldata{
 		Value: &calldata.Calldata_Digest{

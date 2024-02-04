@@ -147,6 +147,7 @@ func Put(ctx context.Context, log log.Logger, data []byte) (*calldata.Calldata, 
 		select {
 		case status := <-sub.Chan():
 			if status.IsFinalized {
+				log.Info("successfully put data to avail", "blockHash", status.AsFinalized.Hex(), "sender", keyringPair.Address, "nonce", o.Nonce.Int64())
 				metrics.WithLabelValues(kindPut, stateSuccess).Inc()
 				return &calldata.Calldata{
 					Value: &calldata.Calldata_AvailRef{

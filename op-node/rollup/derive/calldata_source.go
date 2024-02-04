@@ -154,7 +154,12 @@ func DataFromEVMTransactions(dsCfg DataSourceConfig, batcherAddr common.Address,
 				3,
 				retry.Exponential(),
 				func() ([]byte, error) {
-					return da.Get(context.Background(), log, &c)
+					b, err := da.Get(context.Background(), log, &c)
+					if err != nil {
+						log.Warn("failed to retrieve data from DA, will retry", "err", err)
+						return nil, err
+					}
+					return b, nil
 				},
 			)
 			if err != nil {

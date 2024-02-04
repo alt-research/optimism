@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"time"
 
 	"github.com/ethereum-optimism/optimism/op-service/da/pb/calldata"
 	"github.com/ethereum/go-ethereum/log"
@@ -33,8 +34,9 @@ var (
 )
 
 type CelestiaConfig struct {
-	RPC       string `env:"CELESTIA_RPC"`
-	Namespace string `env:"CELESTIA_NAMESPACE"`
+	RPC       string        `env:"CELESTIA_RPC"`
+	Namespace string        `env:"CELESTIA_NAMESPACE"`
+	Timeout   time.Duration `env:"CELESTIA_TIMEOUT" default:"2m"`
 }
 
 func (c CelestiaConfig) sanitize() error {
@@ -48,9 +50,15 @@ func Init(c *CelestiaConfig) error {
 	if err := c.sanitize(); err != nil {
 		return err
 	}
+	if c.Timeout.Seconds() <= 0 {
+		c.Timeout = 2 * time.Minute
+	}
 	conf = c
 	client = proxy.NewClient()
-	err := client.Start(c.RPC, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	err := client.Start(
+		c.RPC,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
 	if err != nil {
 		return err
 	}
@@ -58,8 +66,10 @@ func Init(c *CelestiaConfig) error {
 }
 
 func Put(ctx context.Context, log log.Logger, data []byte) (*calldata.Calldata, error) {
+	cctx, cancel := context.WithTimeout(ctx, conf.Timeout)
+	defer cancel()
 	log.Info("trying to put data to celestia")
-	ids, _, err := client.Submit(ctx, [][]byte{data}, &da.SubmitOptions{
+	ids, _, err := client.Submit(cctx, [][]byte{data}, &da.SubmitOptions{
 		GasPrice:  -1,
 		Namespace: []byte(conf.Namespace),
 	})
@@ -71,6 +81,7 @@ func Put(ctx context.Context, log log.Logger, data []byte) (*calldata.Calldata, 
 		metrics.WithLabelValues(kindPut, stateFailure).Inc()
 		return nil, fmt.Errorf("submit returned %d ids, expected 1", len(ids))
 	}
+	log.Info("successfully put data to celestia", "id", hex.EncodeToString(ids[0]))
 	metrics.WithLabelValues(kindPut, stateSuccess).Inc()
 	return &calldata.Calldata{
 		Value: &calldata.Calldata_CelestiaRef{
@@ -82,11 +93,13 @@ func Put(ctx context.Context, log log.Logger, data []byte) (*calldata.Calldata, 
 }
 
 func Get(ctx context.Context, log log.Logger, d *calldata.CelestiaRef) ([]byte, error) {
+	cctx, cancel := context.WithTimeout(ctx, conf.Timeout)
+	defer cancel()
 	log.Info(
 		"trying to get data from celestia",
 		"id", hex.EncodeToString(d.GetId()),
 	)
-	bs, err := client.Get(ctx, [][]byte{d.GetId()})
+	bs, err := client.Get(cctx, [][]byte{d.GetId()})
 	if err != nil {
 		metrics.WithLabelValues(kindGet, stateFailure).Inc()
 		return nil, err
