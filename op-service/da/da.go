@@ -3,6 +3,7 @@ package da
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	env "github.com/Netflix/go-env"
 	"github.com/ethereum-optimism/optimism/op-service/da/avail"
@@ -33,20 +34,28 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	switch config.DAName {
-	case "eigenda":
-		err = eigenda.Init(&config.EigenDAConfig)
-	case "s3":
-		err = s3.Init(&config.S3Config)
-	case "celestia":
-		err = celestia.Init(&config.CelestiaConfig)
-	case "avail":
-		err = avail.Init(&config.AvailConfig)
-	default:
+	if !slices.Contains([]string{"eigenda", "s3", "celestia", "avail"}, config.DAName) {
 		panic("unspecified DA")
 	}
-	if err != nil {
-		panic(err)
+	if config.EigenDAConfig.Enable {
+		if err = eigenda.Init(&config.EigenDAConfig); err != nil {
+			panic(err)
+		}
+	}
+	if config.CelestiaConfig.Enable {
+		if err = celestia.Init(&config.CelestiaConfig); err != nil {
+			panic(err)
+		}
+	}
+	if config.AvailConfig.Enable {
+		if err = avail.Init(&config.AvailConfig); err != nil {
+			panic(err)
+		}
+	}
+	if config.S3Config.Enable {
+		if err = s3.Init(&config.S3Config); err != nil {
+			panic(err)
+		}
 	}
 }
 

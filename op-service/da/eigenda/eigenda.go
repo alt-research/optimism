@@ -15,6 +15,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 var (
@@ -36,13 +37,14 @@ var (
 )
 
 type EigenDAConfig struct {
-	EigenDAEnable                   bool          `env:"EIGEN_DA_ENABLE"`
+	Enable                          bool          `env:"EIGEN_DA_ENABLE"`
 	EigenDARpc                      string        `env:"EIGEN_DA_RPC"`
 	EigenDAQuorumID                 uint32        `env:"EIGEN_DA_QUORUM_ID"`
 	EigenDAAdversaryThreshold       uint32        `env:"EIGEN_DA_ADVERSARY_THRESHOLD"`
 	EigenDAQuorumThreshold          uint32        `env:"EIGEN_DA_QUORUM_THRESHOLD"`
 	EigenDAStatusQueryRetryInterval time.Duration `env:"EIGEN_DA_STATUS_QUERY_RETRY_INTERVAL"`
 	EigenDAStatusQueryTimeout       time.Duration `env:"EIGEN_DA_STATUS_QUERY_TIMEOUT"`
+	EigenDAInsecure                 bool          `env:"EIGEN_DA_INSECURE"`
 }
 
 func (c EigenDAConfig) sanitize() error {
@@ -69,11 +71,16 @@ func Init(c *EigenDAConfig) error {
 		return err
 	}
 	conf = c
-
-	creds := credentials.NewTLS(&tls.Config{
-		InsecureSkipVerify: true,
-	})
-	conn, err := grpc.Dial(conf.EigenDARpc, grpc.WithTransportCredentials(creds))
+	var opts []grpc.DialOption
+	if conf.EigenDAInsecure {
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	} else {
+		creds := credentials.NewTLS(&tls.Config{
+			InsecureSkipVerify: true,
+		})
+		opts = append(opts, grpc.WithTransportCredentials(creds))
+	}
+	conn, err := grpc.Dial(conf.EigenDARpc, opts...)
 	if err != nil {
 		return err
 	}

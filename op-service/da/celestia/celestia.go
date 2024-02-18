@@ -34,6 +34,7 @@ var (
 )
 
 type CelestiaConfig struct {
+	Enable    bool          `env:"CELESTIA_ENABLE"`
 	RPC       string        `env:"CELESTIA_RPC"`
 	Namespace string        `env:"CELESTIA_NAMESPACE"`
 	Timeout   time.Duration `env:"CELESTIA_TIMEOUT" default:"2m"`

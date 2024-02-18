@@ -35,6 +35,7 @@ var (
 )
 
 type S3Config struct {
+	Enable   bool   `env:"S3_ENABLE"`
 	Bucket   string `env:"AWS_S3_BUCKET"`
 	Endpoint string `env:"AWS_ENDPOINT"`
 	Region   string `env:"AWS_REGION"`

@@ -47,6 +47,7 @@ func GetAccountNonce(accountNonce uint32) uint32 {
 }
 
 type AvailConfig struct {
+	Enable       bool          `env:"AVAIL_ENABLE"`
 	Seed         string        `env:"AVAIL_SEED"`
 	ApiURL       string        `env:"AVAIL_APIURL"`
 	AppID        int           `env:"AVAIL_APPID"`
