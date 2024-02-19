@@ -13,10 +13,13 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/ethereum-optimism/optimism/op-batcher/metrics"
 	"github.com/ethereum-optimism/optimism/op-node/rollup"
 	"github.com/ethereum-optimism/optimism/op-node/rollup/derive"
+	"github.com/ethereum-optimism/optimism/op-service/da"
+	"github.com/ethereum-optimism/optimism/op-service/da/pb/calldata"
 	"github.com/ethereum-optimism/optimism/op-service/dial"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 	"github.com/ethereum-optimism/optimism/op-service/txmgr"
@@ -360,7 +363,19 @@ func (l *BatchSubmitter) publishTxToL1(ctx context.Context, queue *txmgr.Queue[t
 // This is a blocking method. It should not be called concurrently.
 func (l *BatchSubmitter) sendTransaction(txdata txData, queue *txmgr.Queue[txData], receiptsCh chan txmgr.TxReceipt[txData]) error {
 	// Do the gas estimation offline. A value of 0 will cause the [txmgr] to estimate the gas limit.
-	data := txdata.Bytes()
+	c, err := da.Put(context.Background(), l.Log, txdata.Bytes())
+	if err != nil {
+		l.Log.Warn("failed to send data to DA, falling back to send raw tx data to l1", "err", err)
+		err = nil
+		c = &calldata.Calldata{
+			Value: &calldata.Calldata_Raw{
+				Raw: txdata.Bytes(),
+			},
+		}
+	} else {
+		log.Info("successfully send data to DA, sending ref to l1 now")
+	}
+	data, _ := proto.Marshal(c)
 
 	var candidate *txmgr.TxCandidate
 	if l.Config.UseBlobs {
