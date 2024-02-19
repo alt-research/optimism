@@ -76,7 +76,7 @@ func (ds *DataSourceFactory) OpenData(ctx context.Context, ref eth.L1BlockRef, b
 		// plasma([calldata | blobdata](l1Ref)) -> data
 		return NewPlasmaDataSource(ds.log, src, ds.plasmaFetcher, ref.ID()), nil
 	}
-	return src, nil
+	return NewDaDataSource(ds.log, src, ref.ID()), nil
 }
 
 // DataSourceConfig regroups the mandatory rollup.Config fields needed for DataFromEVMTransactions.

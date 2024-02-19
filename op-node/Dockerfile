@@ -1,4 +1,5 @@
-ARG OP_STACK_GO_BUILDER=us-docker.pkg.dev/oplabs-tools-artifacts/images/op-stack-go:latest
+#ARG OP_STACK_GO_BUILDER=us-docker.pkg.dev/oplabs-tools-artifacts/images/op-stack-go:latest
+ARG OP_STACK_GO_BUILDER
 FROM $OP_STACK_GO_BUILDER as builder
 # See "make golang-docker" and /ops/docker/op-stack-go
 
