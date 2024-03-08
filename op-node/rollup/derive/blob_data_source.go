@@ -2,7 +2,6 @@ package derive
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -11,12 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"google.golang.org/protobuf/proto"
 
-	"github.com/ethereum-optimism/optimism/op-service/da"
-	"github.com/ethereum-optimism/optimism/op-service/da/pb/calldata"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
-	"github.com/ethereum-optimism/optimism/op-service/retry"
 )
 
 type blobOrCalldata struct {
@@ -75,30 +70,6 @@ func (ds *BlobDataSource) Next(ctx context.Context) (eth.Data, error) {
 		ds.log.Error("ignoring blob due to parse failure", "err", err)
 		return ds.Next(ctx)
 	}
-
-	c := calldata.Calldata{}
-	if err := proto.Unmarshal(data, &c); err != nil {
-		log.Warn("tx in blob is not a protobuf calldata, probably raw data", hex.EncodeToString(data))
-		return data, nil
-	}
-	data, err = retry.Do(
-		context.Background(),
-		3,
-		retry.Exponential(),
-		func() ([]byte, error) {
-			b, err := da.Get(context.Background(), ds.log, &c)
-			if err != nil {
-				log.Warn("failed to retrieve data from DA, will retry", "err", err)
-				return nil, err
-			}
-			return b, nil
-		},
-	)
-	if err != nil {
-		log.Error("failed to retrieve data from DA after 3 times retry", "err", err)
-		return nil, err
-	}
-
 	return data, nil
 }
 

@@ -2,7 +2,6 @@ package derive
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -11,12 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"google.golang.org/protobuf/proto"
 
-	"github.com/ethereum-optimism/optimism/op-service/da"
-	"github.com/ethereum-optimism/optimism/op-service/da/pb/calldata"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
-	"github.com/ethereum-optimism/optimism/op-service/retry"
 )
 
 // CalldataSource is a fault tolerant approach to fetching data.
@@ -49,22 +44,10 @@ func NewCalldataSource(ctx context.Context, log log.Logger, dsCfg DataSourceConf
 			batcherAddr: batcherAddr,
 		}
 	}
-	data, err := DataFromEVMTransactions(dsCfg, batcherAddr, txs, log.New("origin", ref))
-	if err != nil {
-		return &CalldataSource{
-			open:        false,
-			ref:         ref,
-			dsCfg:       dsCfg,
-			fetcher:     fetcher,
-			log:         log,
-			batcherAddr: batcherAddr,
-		}
-	}
 	return &CalldataSource{
 		open: true,
-		data: data,
+		data: DataFromEVMTransactions(dsCfg, batcherAddr, txs, log.New("origin", ref)),
 	}
-
 }
 
 // Next returns the next piece of data if it has it. If the constructor failed, this
@@ -74,9 +57,7 @@ func (ds *CalldataSource) Next(ctx context.Context) (eth.Data, error) {
 	if !ds.open {
 		if _, txs, err := ds.fetcher.InfoAndTxsByHash(ctx, ds.ref.Hash); err == nil {
 			ds.open = true
-			if ds.data, err = DataFromEVMTransactions(ds.dsCfg, ds.batcherAddr, txs, ds.log); err != nil {
-				return nil, NewTemporaryError(fmt.Errorf("failed to open calldata source: %w", err))
-			}
+			ds.data = DataFromEVMTransactions(ds.dsCfg, ds.batcherAddr, txs, ds.log)
 		} else if errors.Is(err, ethereum.NotFound) {
 			return nil, NewResetError(fmt.Errorf("failed to open calldata source: %w", err))
 		} else {
@@ -95,35 +76,12 @@ func (ds *CalldataSource) Next(ctx context.Context) (eth.Data, error) {
 // DataFromEVMTransactions filters all of the transactions and returns the calldata from transactions
 // that are sent to the batch inbox address from the batch sender address.
 // This will return an empty array if no valid transactions are found.
-func DataFromEVMTransactions(dsCfg DataSourceConfig, batcherAddr common.Address, txs types.Transactions, log log.Logger) ([]eth.Data, error) {
-	var out []eth.Data
-	for j, tx := range txs {
+func DataFromEVMTransactions(dsCfg DataSourceConfig, batcherAddr common.Address, txs types.Transactions, log log.Logger) []eth.Data {
+	out := []eth.Data{}
+	for _, tx := range txs {
 		if isValidBatchTx(tx, dsCfg.l1Signer, dsCfg.batchInboxAddress, batcherAddr) {
-			c := calldata.Calldata{}
-			if err := proto.Unmarshal(tx.Data(), &c); err != nil {
-				log.Warn("tx in inbox is not a protobuf calldata, probably raw data", "index", j, "txHash", tx.Hash(), "txDataHex", hex.EncodeToString(tx.Data()))
-				out = append(out, tx.Data())
-				continue
-			}
-			data, err := retry.Do(
-				context.Background(),
-				3,
-				retry.Exponential(),
-				func() ([]byte, error) {
-					b, err := da.Get(context.Background(), log, &c)
-					if err != nil {
-						log.Warn("failed to retrieve data from DA, will retry", "err", err)
-						return nil, err
-					}
-					return b, nil
-				},
-			)
-			if err != nil {
-				log.Error("failed to retrieve data from DA after 3 times retry", "err", err)
-				return nil, err
-			}
-			out = append(out, data)
+			out = append(out, tx.Data())
 		}
 	}
-	return out, nil
+	return out
 }
