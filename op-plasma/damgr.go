@@ -23,11 +23,15 @@ type Input struct {
 }
 
 // NewPlasmaDA creates a new PlasmaDA instance with the given log and CLIConfig.
-func NewPlasmaDA(log log.Logger, cfg CLIConfig) *DA {
+func NewPlasmaDA(log log.Logger, cfg CLIConfig) (*DA, error) {
+	storage, err := cfg.NewDAClient(log)
+	if err != nil {
+		return nil, err
+	}
 	return &DA{
 		log:     log,
-		storage: cfg.NewDAClient(),
-	}
+		storage: storage,
+	}, nil
 }
 
 // NewPlasmaDAWithStorage creates a new PlasmaDA instance with the given log and DAStorage interface.

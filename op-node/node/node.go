@@ -375,7 +375,10 @@ func (n *OpNode) initL2(ctx context.Context, cfg *Config, snapshotLog log.Logger
 		sequencerConductor = NewConductorClient(cfg, n.log, n.metrics)
 	}
 
-	plasmaDA := plasma.NewPlasmaDA(n.log, cfg.Plasma)
+	plasmaDA, err := plasma.NewPlasmaDA(n.log, cfg.Plasma)
+	if err != nil {
+		return err
+	}
 	if cfg.Plasma.Enabled {
 		n.log.Info("Plasma DA enabled", "da_server", cfg.Plasma.DAServerURL)
 	}

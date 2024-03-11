@@ -52,7 +52,7 @@ type BatcherService struct {
 	L1Client         *ethclient.Client
 	EndpointProvider dial.L2EndpointProvider
 	TxManager        txmgr.TxManager
-	PlasmaDA         *plasma.DAClient
+	PlasmaDA         plasma.DAStorage
 
 	BatcherConfig
 
@@ -311,7 +311,11 @@ func (bs *BatcherService) initPlasmaDA(cfg *CLIConfig) error {
 	if err := config.Check(); err != nil {
 		return err
 	}
-	bs.PlasmaDA = config.NewDAClient()
+	var err error
+	bs.PlasmaDA, err = config.NewDAClient(bs.Log)
+	if err != nil {
+		return err
+	}
 	bs.UsePlasma = config.Enabled
 	return nil
 }

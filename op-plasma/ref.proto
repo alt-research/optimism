@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+option go_package = "pb/ref";
+
+package ref;
+
+// Calldata wraps the raw data or the data ref in da
+message Ref {
+  oneof value {
+    bytes raw = 1;
+    EigenDA eigenda = 2;
+    Digest Digest = 3;
+    Celestia celestia = 4;
+    Avail avail = 5;
+  }
+}
+
+message EigenDA {
+  bytes batch_header_hash = 1;
+  uint32 blob_index = 2;
+}
+
+message Celestia { bytes id = 1; }
+
+message Avail {
+  string block_hash = 1;
+  string sender = 2;
+  int64 nonce = 3;
+}
+
+message Digest { bytes payload = 1; }
