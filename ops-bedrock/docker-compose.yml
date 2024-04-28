@@ -11,9 +11,36 @@ volumes:
   challenger_data:
   da_data:
   op_log:
+  localstack:
 
 
 services:
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - 4566:4566
+    environment:
+      - SERVICES=s3
+      - DEFAULT_REGION=us-east-1
+      - DATA_DIR=/tmp/localstack/data
+      - DEBUG=1
+    volumes:
+      - localstack:/var/lib/localstack
+      - ./localstack:/etc/localstack/init/ready.d
+
+  celestia:
+    image: ghcr.io/rollkit/local-celestia-devnet:v0.12.2
+    ports:
+      - "26650:26650"
+    environment:
+      CELESTIA_NAMESPACE: 000008e5f679bf7116cb
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:26659/header/1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   op_stack_go_builder:  # Not an actual service, but builds the prerequisite go images
     build:
       context: ../
@@ -58,10 +85,13 @@ services:
       GETH_MINER_RECOMMIT: 100ms
 
   op-node:
+    restart: always
     depends_on:
       - op_stack_go_builder
       - l1
       - l2
+      - localstack
+      - celestia
     build:
       context: ../
       dockerfile: ./op-node/Dockerfile
@@ -107,8 +137,11 @@ services:
       - "${PWD}/test-jwt-secret.txt:/config/test-jwt-secret.txt"
       - "${PWD}/../.devnet/rollup.json:/rollup.json"
       - op_log:/op_log
+    env_file:
+      - .da.env
 
   op-proposer:
+    restart: always
     depends_on:
       - op_stack_go_builder
       - l1
@@ -141,11 +174,14 @@ services:
       OP_PROPOSER_RPC_ENABLE_ADMIN: "true"
 
   op-batcher:
+    restart: always
     depends_on:
       - op_stack_go_builder
       - l1
       - l2
       - op-node
+      - localstack
+      - celestia
     build:
       context: ../
       dockerfile: ./op-batcher/Dockerfile
@@ -172,6 +208,8 @@ services:
       OP_BATCHER_BATCH_TYPE: 0
       OP_BATCHER_PLASMA_ENABLED: "${PLASMA_ENABLED}"
       OP_BATCHER_PLASMA_DA_SERVER: "http://da-server:3100"
+    env_file:
+      - .da.env
 
   op-challenger:
     depends_on:

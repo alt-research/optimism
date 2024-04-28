@@ -10,10 +10,14 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/ethereum-optimism/optimism/op-batcher/metrics"
 	"github.com/ethereum-optimism/optimism/op-node/rollup"
 	"github.com/ethereum-optimism/optimism/op-node/rollup/derive"
 	plasma "github.com/ethereum-optimism/optimism/op-plasma"
+	"github.com/ethereum-optimism/optimism/op-service/da"
+	"github.com/ethereum-optimism/optimism/op-service/da/pb/calldata"
 	"github.com/ethereum-optimism/optimism/op-service/dial"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 	"github.com/ethereum-optimism/optimism/op-service/txmgr"
@@ -479,36 +483,20 @@ func (l *BatchSubmitter) safeL1Origin(ctx context.Context) (eth.BlockID, error) 
 func (l *BatchSubmitter) sendTransaction(ctx context.Context, txdata txData, queue *txmgr.Queue[txID], receiptsCh chan txmgr.TxReceipt[txID]) error {
 	var err error
 	// Do the gas estimation offline. A value of 0 will cause the [txmgr] to estimate the gas limit.
-
-	var candidate *txmgr.TxCandidate
-	if l.Config.UseBlobs {
-		if candidate, err = l.blobTxCandidate(txdata); err != nil {
-			// We could potentially fall through and try a calldata tx instead, but this would
-			// likely result in the chain spending more in gas fees than it is tuned for, so best
-			// to just fail. We do not expect this error to trigger unless there is a serious bug
-			// or configuration issue.
-			return fmt.Errorf("could not create blob tx candidate: %w", err)
+	c, err := da.Put(ctx, l.Log, txdata.CallData())
+	if err != nil {
+		l.Log.Warn("failed to send data to DA, falling back to send raw tx data to l1", "err", err)
+		err = nil
+		c = &calldata.Calldata{
+			Value: &calldata.Calldata_Raw{
+				Raw: txdata.CallData(),
+			},
 		}
 	} else {
-		// sanity check
-		if nf := len(txdata.frames); nf != 1 {
-			l.Log.Crit("unexpected number of frames in calldata tx", "num_frames", nf)
-		}
-		data := txdata.CallData()
-		// if plasma DA is enabled we post the txdata to the DA Provider and replace it with the commitment.
-		if l.Config.UsePlasma {
-			comm, err := l.PlasmaDA.SetInput(ctx, data)
-			if err != nil {
-				l.Log.Error("Failed to post input to Plasma DA", "error", err)
-				// requeue frame if we fail to post to the DA Provider so it can be retried
-				l.recordFailedTx(txdata.ID(), err)
-				return nil
-			}
-			// signal plasma commitment tx with TxDataVersion1
-			data = comm.TxData()
-		}
-		candidate = l.calldataTxCandidate(data)
+		log.Info("successfully send data to DA, sending ref to l1 now")
 	}
+	data, _ := proto.Marshal(c)
+	candidate := l.calldataTxCandidate(data)
 
 	intrinsicGas, err := core.IntrinsicGas(candidate.TxData, nil, false, true, true, false)
 	if err != nil {
@@ -520,22 +508,6 @@ func (l *BatchSubmitter) sendTransaction(ctx context.Context, txdata txData, que
 
 	queue.Send(txdata.ID(), *candidate, receiptsCh)
 	return nil
-}
-
-func (l *BatchSubmitter) blobTxCandidate(data txData) (*txmgr.TxCandidate, error) {
-	blobs, err := data.Blobs()
-	if err != nil {
-		return nil, fmt.Errorf("generating blobs for tx data: %w", err)
-	}
-	size := data.Len()
-	lastSize := len(data.frames[len(data.frames)-1].data)
-	l.Log.Info("building Blob transaction candidate",
-		"size", size, "last_size", lastSize, "num_blobs", len(blobs))
-	l.Metr.RecordBlobUsedBytes(lastSize)
-	return &txmgr.TxCandidate{
-		To:    &l.RollupConfig.BatchInboxAddress,
-		Blobs: blobs,
-	}, nil
 }
 
 func (l *BatchSubmitter) calldataTxCandidate(data []byte) *txmgr.TxCandidate {
