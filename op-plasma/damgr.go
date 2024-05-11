@@ -239,8 +239,8 @@ func (d *DA) isExpired(bn uint64) bool {
 // as the new head for tracking challenges. If forwards an error if any new challenge have expired to
 // trigger a derivation reset.
 func (d *DA) AdvanceL1Origin(ctx context.Context, l1 L1Fetcher, block eth.BlockID) error {
-	// do not repeat for the same origin
-	if block.Number <= d.origin.Number {
+	// do not repeat for the old origin
+	if block.Number < d.origin.Number {
 		return nil
 	}
 	// sync challenges for the given block ID
