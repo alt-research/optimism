@@ -189,10 +189,11 @@ func (d *DA) GetInput(ctx context.Context, l1 L1Fetcher, comm CommitmentData, bl
 		// in which case derivation pipeline should be retried
 		return nil, err
 	}
-
+	d.log.Info("challenge status", "blockid", blockId, "challengeStatus", ch.challengeStatus)
 	switch ch.challengeStatus {
 	case ChallengeActive:
 		if d.isExpired(ch.expiresAt) {
+			d.log.Info("isExpired", "ch.expiresAt", ch.expiresAt, "d.isExpired(ch.expiresAt)", d.isExpired(ch.expiresAt))
 			// this challenge has expired, this input must be skipped
 			return nil, ErrExpiredChallenge
 		} else if notFound {
@@ -204,6 +205,7 @@ func (d *DA) GetInput(ctx context.Context, l1 L1Fetcher, comm CommitmentData, bl
 			return nil, ErrPendingChallenge
 		}
 	case ChallengeExpired:
+		d.log.Info("ChallengeExpired return directly")
 		// challenge was marked as expired, skip
 		return nil, ErrExpiredChallenge
 	case ChallengeResolved:
