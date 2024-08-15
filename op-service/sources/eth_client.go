@@ -130,6 +130,15 @@ type EthClient struct {
 	// cache payloads by hash
 	// common.Hash -> *eth.ExecutionPayload
 	payloadsCache *caching.LRUCache[common.Hash, *eth.ExecutionPayloadEnvelope]
+
+	// cache receipt by hash
+	// common.Hash -> *eth.ExecutionPayload
+	receiptsCache *caching.LRUCache[common.Hash, receiptsCacheVal]
+}
+
+type receiptsCacheVal struct {
+	block    eth.BlockInfo
+	receipts types.Receipts
 }
 
 // NewEthClient returns an [EthClient], wrapping an RPC with bindings to fetch ethereum data with added error logging,
@@ -168,6 +177,7 @@ func NewEthClient(client client.RPC, log log.Logger, metrics caching.Metrics, co
 		transactionsCache: caching.NewLRUCache[common.Hash, types.Transactions](metrics, "txs", config.TransactionsCacheSize),
 		headersCache:      caching.NewLRUCache[common.Hash, eth.BlockInfo](metrics, "headers", config.HeadersCacheSize),
 		payloadsCache:     caching.NewLRUCache[common.Hash, *eth.ExecutionPayloadEnvelope](metrics, "payloads", config.PayloadsCacheSize),
+		receiptsCache:     caching.NewLRUCache[common.Hash, receiptsCacheVal](metrics, "payloads", config.PayloadsCacheSize),
 	}, nil
 }
 
@@ -283,7 +293,18 @@ func (s *EthClient) InfoByHash(ctx context.Context, hash common.Hash) (eth.Block
 	if header, ok := s.headersCache.Get(hash); ok {
 		return header, nil
 	}
-	return s.headerCall(ctx, "eth_getBlockByHash", hashID(hash))
+	info, err := s.headerCall(ctx, "eth_getBlockByHash", hashID(hash))
+
+	n := uint64(s.preFetchNum)
+	{
+		for i := uint64(0); i < n; i++ {
+			go (func(num uint64) {
+				s.headerCall(ctx, "eth_getBlockByNumber", numberID(info.NumberU64()+num))
+			})(i)
+		}
+	}
+
+	return info, err
 }
 
 func (s *EthClient) InfoByNumber(ctx context.Context, number uint64) (eth.BlockInfo, error) {
@@ -420,6 +441,33 @@ func (s *EthClient) PayloadByLabel(ctx context.Context, label eth.BlockLabel) (*
 // It verifies the receipt hash in the block header against the receipt hash of the fetched receipts
 // to ensure that the execution engine did not fail to return any receipts.
 func (s *EthClient) FetchReceipts(ctx context.Context, blockHash common.Hash) (eth.BlockInfo, types.Receipts, error) {
+	if val, ok := s.receiptsCache.Get(blockHash); ok {
+		return val.block, val.receipts, nil
+	}
+
+	info, receipts, err := s.fetchReceipts(ctx, blockHash)
+
+	number := info.NumberU64()
+	n := uint64(s.preFetchNum)
+	{
+		for i := uint64(0); i < n; i++ {
+			go (func(num uint64) {
+				info, _, err := s.InfoAndTxsByNumber(ctx, number+num)
+				if err != nil {
+					return
+				}
+				s.fetchReceipts(ctx, info.Hash())
+			})(i)
+		}
+	}
+
+	return info, receipts, err
+}
+
+// FetchReceipts returns a block info and all of the receipts associated with transactions in the block.
+// It verifies the receipt hash in the block header against the receipt hash of the fetched receipts
+// to ensure that the execution engine did not fail to return any receipts.
+func (s *EthClient) fetchReceipts(ctx context.Context, blockHash common.Hash) (eth.BlockInfo, types.Receipts, error) {
 	info, txs, err := s.InfoAndTxsByHash(ctx, blockHash)
 	if err != nil {
 		return nil, nil, fmt.Errorf("querying block: %w", err)
@@ -430,6 +478,8 @@ func (s *EthClient) FetchReceipts(ctx context.Context, blockHash common.Hash) (e
 	if err != nil {
 		return nil, nil, err
 	}
+
+	s.receiptsCache.Add(blockHash, receiptsCacheVal{block: info, receipts: receipts})
 	return info, receipts, nil
 }
 
