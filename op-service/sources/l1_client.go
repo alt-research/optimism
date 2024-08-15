@@ -3,6 +3,8 @@ package sources
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,9 +28,22 @@ func L1ClientDefaultConfig(config *rollup.Config, trustRPC bool, kind RPCProvide
 	// Cache 3/2 worth of sequencing window of receipts and txs
 	span := int(config.SeqWindowSize) * 3 / 2
 	fullSpan := span
+
 	if span > 10000 { // sanity cap. If a large sequencing window is configured, do not make the cache too large
 		span = 10000
 	}
+
+	{
+		envVar := os.Getenv("CACHE_SIZE")
+		if len(envVar) != 0 {
+			var err error
+			span, err = strconv.Atoi(envVar)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+
 	return &L1ClientConfig{
 		EthClientConfig: EthClientConfig{
 			// receipts and transactions are cached per block

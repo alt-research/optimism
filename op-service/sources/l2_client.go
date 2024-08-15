@@ -3,6 +3,8 @@ package sources
 import (
 	"context"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,9 +39,21 @@ func L2ClientDefaultConfig(config *rollup.Config, trustRPC bool) *L2ClientConfig
 		span /= int(config.BlockTime)
 	}
 	fullSpan := span
-	if span > 1000 { // sanity cap. If a large sequencing window is configured, do not make the cache too large
-		span = 1000
+	if span > 10000 { // sanity cap. If a large sequencing window is configured, do not make the cache too large
+		span = 10000
 	}
+
+	{
+		envVar := os.Getenv("CACHE_SIZE")
+		if len(envVar) != 0 {
+			var err error
+			span, err = strconv.Atoi(envVar)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+
 	return &L2ClientConfig{
 		EthClientConfig: EthClientConfig{
 			// receipts and transactions are cached per block
