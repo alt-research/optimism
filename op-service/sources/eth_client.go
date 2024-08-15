@@ -306,7 +306,7 @@ func (s *EthClient) InfoByLabel(ctx context.Context, label eth.BlockLabel) (eth.
 	{
 		for i := uint64(0); i < n; i++ {
 			go (func(num uint64) {
-				s.blockCall(ctx, "eth_getBlockByNumber", numberID(info.NumberU64()+num))
+				s.headerCall(ctx, "eth_getBlockByNumber", numberID(info.NumberU64()+num))
 			})(i)
 		}
 	}
