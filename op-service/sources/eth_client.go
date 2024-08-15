@@ -145,8 +145,7 @@ func NewEthClient(client client.RPC, log log.Logger, metrics caching.Metrics, co
 		return nil, fmt.Errorf("failed to open RethDB")
 	}
 
-	preFetchNum := 10
-
+	preFetchNum := 20
 	{
 		envVar := os.Getenv("PRE_FETCH_NUM")
 		if len(envVar) != 0 {
@@ -364,7 +363,19 @@ func (s *EthClient) PayloadByHash(ctx context.Context, hash common.Hash) (*eth.E
 	if payload, ok := s.payloadsCache.Get(hash); ok {
 		return payload, nil
 	}
-	return s.payloadCall(ctx, "eth_getBlockByHash", hashID(hash))
+	res, err := s.payloadCall(ctx, "eth_getBlockByHash", hashID(hash))
+
+	number := uint64(res.ExecutionPayload.BlockNumber)
+	n := uint64(s.preFetchNum)
+	{
+		for i := uint64(0); i < n; i++ {
+			go (func(num uint64) {
+				s.payloadCall(ctx, "eth_getBlockByNumber", numberID(number+num))
+			})(i)
+		}
+	}
+
+	return res, err
 }
 
 func (s *EthClient) PayloadByNumber(ctx context.Context, number uint64) (*eth.ExecutionPayloadEnvelope, error) {
@@ -381,7 +392,19 @@ func (s *EthClient) PayloadByNumber(ctx context.Context, number uint64) (*eth.Ex
 }
 
 func (s *EthClient) PayloadByLabel(ctx context.Context, label eth.BlockLabel) (*eth.ExecutionPayloadEnvelope, error) {
-	return s.payloadCall(ctx, "eth_getBlockByNumber", label)
+	res, err := s.payloadCall(ctx, "eth_getBlockByNumber", label)
+
+	number := uint64(res.ExecutionPayload.BlockNumber)
+	n := uint64(s.preFetchNum)
+	{
+		for i := uint64(0); i < n; i++ {
+			go (func(num uint64) {
+				s.payloadCall(ctx, "eth_getBlockByNumber", numberID(number+num))
+			})(i)
+		}
+	}
+
+	return res, err
 }
 
 // FetchReceipts returns a block info and all of the receipts associated with transactions in the block.
