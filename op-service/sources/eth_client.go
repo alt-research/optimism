@@ -307,7 +307,9 @@ func (s *EthClient) InfoByHash(ctx context.Context, hash common.Hash) (eth.Block
 		return header, nil
 	}
 	info, err := s.headerCall(ctx, "eth_getBlockByHash", hashID(hash))
-
+	if err != nil {
+		return nil, err
+	}
 	n := uint64(s.preFetchNum)
 	{
 		for i := uint64(0); i < n; i++ {
@@ -340,6 +342,9 @@ func (s *EthClient) InfoByNumber(ctx context.Context, number uint64) (eth.BlockI
 
 func (s *EthClient) InfoByLabel(ctx context.Context, label eth.BlockLabel) (eth.BlockInfo, error) {
 	info, err := s.headerCall(ctx, "eth_getBlockByNumber", label)
+	if err != nil {
+		return nil, err
+	}
 	n := uint64(s.preFetchNum)
 	{
 		for i := uint64(0); i < n; i++ {
@@ -421,6 +426,9 @@ func (s *EthClient) PayloadByHash(ctx context.Context, hash common.Hash) (*eth.E
 	}
 
 	res, err := s.payloadCall(ctx, "eth_getBlockByHash", hashID(hash))
+	if err != nil {
+		return nil, err
+	}
 	number := uint64(res.ExecutionPayload.BlockNumber)
 	n := uint64(s.preFetchNum)
 	{
@@ -440,6 +448,9 @@ func (s *EthClient) PayloadByNumber(ctx context.Context, number uint64) (*eth.Ex
 	}
 
 	res, err := s.payloadCall(ctx, "eth_getBlockByNumber", numberID(number))
+	if err != nil {
+		return nil, err
+	}
 	n := uint64(s.preFetchNum)
 	{
 		for i := uint64(0); i < n; i++ {
@@ -453,7 +464,9 @@ func (s *EthClient) PayloadByNumber(ctx context.Context, number uint64) (*eth.Ex
 }
 func (s *EthClient) PayloadByLabel(ctx context.Context, label eth.BlockLabel) (*eth.ExecutionPayloadEnvelope, error) {
 	res, err := s.payloadCall(ctx, "eth_getBlockByNumber", label)
-
+	if err != nil {
+		return nil, err
+	}
 	number := uint64(res.ExecutionPayload.BlockNumber)
 	n := uint64(s.preFetchNum)
 	{
@@ -476,6 +489,9 @@ func (s *EthClient) FetchReceipts(ctx context.Context, blockHash common.Hash) (e
 	}
 
 	info, receipts, err := s.fetchReceipts(ctx, blockHash)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	number := info.NumberU64()
 	n := uint64(s.preFetchNum)
