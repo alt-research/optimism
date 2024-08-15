@@ -301,8 +301,17 @@ func (s *EthClient) InfoByNumber(ctx context.Context, number uint64) (eth.BlockI
 }
 
 func (s *EthClient) InfoByLabel(ctx context.Context, label eth.BlockLabel) (eth.BlockInfo, error) {
+	info, err := s.headerCall(ctx, "eth_getBlockByNumber", label)
+	n := uint64(s.preFetchNum)
+	{
+		for i := uint64(0); i < n; i++ {
+			go (func(num uint64) {
+				s.blockCall(ctx, "eth_getBlockByNumber", numberID(info.NumberU64()+num))
+			})(i)
+		}
+	}
 	// can't hit the cache when querying the head due to reorgs / changes.
-	return s.headerCall(ctx, "eth_getBlockByNumber", label)
+	return info, err
 }
 
 func (s *EthClient) InfoAndTxsByHash(ctx context.Context, hash common.Hash) (eth.BlockInfo, types.Transactions, error) {
