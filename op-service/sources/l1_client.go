@@ -98,19 +98,6 @@ func (s *L1Client) L1BlockRefByNumber(ctx context.Context, num uint64) (eth.L1Bl
 	}
 	ref := eth.InfoToL1BlockRef(info)
 	s.l1BlockRefsCache.Add(ref.Hash, ref)
-
-	// assume all blocks are finalized.
-	// pre fetch
-	{
-		n := 10
-		for i := 0; i < n; i++ {
-			info, err := s.InfoByNumber(ctx, num)
-			if err != nil {
-				return eth.L1BlockRef{}, fmt.Errorf("failed to fetch header by num %d: %w", num, err)
-			}
-			info.
-		}
-	}
 	return ref, nil
 }
 
