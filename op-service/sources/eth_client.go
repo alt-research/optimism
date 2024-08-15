@@ -312,7 +312,22 @@ func (s *EthClient) InfoAndTxsByHash(ctx context.Context, hash common.Hash) (eth
 			return header, txs, nil
 		}
 	}
-	return s.blockCall(ctx, "eth_getBlockByHash", hashID(hash))
+
+	info, txs, err := s.blockCall(ctx, "eth_getBlockByHash", hashID(hash))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	n := uint64(s.preFetchNum)
+	{
+		for i := uint64(0); i < n; i++ {
+			go (func(num uint64) {
+				s.blockCall(ctx, "eth_getBlockByNumber", numberID(info.NumberU64()+num))
+			})(i)
+		}
+	}
+
+	return info, txs, err
 }
 
 func (s *EthClient) InfoAndTxsByNumber(ctx context.Context, number uint64) (eth.BlockInfo, types.Transactions, error) {
@@ -331,7 +346,18 @@ func (s *EthClient) InfoAndTxsByNumber(ctx context.Context, number uint64) (eth.
 
 func (s *EthClient) InfoAndTxsByLabel(ctx context.Context, label eth.BlockLabel) (eth.BlockInfo, types.Transactions, error) {
 	// can't hit the cache when querying the head due to reorgs / changes.
-	return s.blockCall(ctx, "eth_getBlockByNumber", label)
+	info, txs, err := s.blockCall(ctx, "eth_getBlockByNumber", label)
+
+	n := uint64(s.preFetchNum)
+	{
+		for i := uint64(0); i < n; i++ {
+			go (func(num uint64) {
+				s.blockCall(ctx, "eth_getBlockByNumber", numberID(info.NumberU64()+num))
+			})(i)
+		}
+	}
+
+	return info, txs, err
 }
 
 func (s *EthClient) PayloadByHash(ctx context.Context, hash common.Hash) (*eth.ExecutionPayloadEnvelope, error) {
