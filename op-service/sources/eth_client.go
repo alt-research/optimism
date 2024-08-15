@@ -292,7 +292,7 @@ func (s *EthClient) InfoByNumber(ctx context.Context, number uint64) (eth.BlockI
 	{
 		for i := uint64(0); i < n; i++ {
 			go (func(num uint64) {
-				s.headerCall(ctx, "eth_getBlockByNumber", numberID(number))
+				s.headerCall(ctx, "eth_getBlockByNumber", numberID(number+num))
 			})(i)
 		}
 	}
@@ -320,7 +320,7 @@ func (s *EthClient) InfoAndTxsByNumber(ctx context.Context, number uint64) (eth.
 	{
 		for i := uint64(0); i < n; i++ {
 			go (func(num uint64) {
-				s.blockCall(ctx, "eth_getBlockByNumber", numberID(number))
+				s.blockCall(ctx, "eth_getBlockByNumber", numberID(number+num))
 			})(i)
 		}
 	}
@@ -346,7 +346,7 @@ func (s *EthClient) PayloadByNumber(ctx context.Context, number uint64) (*eth.Ex
 	{
 		for i := uint64(0); i < n; i++ {
 			go (func(num uint64) {
-				s.payloadCall(ctx, "eth_getBlockByNumber", numberID(number))
+				s.payloadCall(ctx, "eth_getBlockByNumber", numberID(number+num))
 			})(i)
 		}
 	}
