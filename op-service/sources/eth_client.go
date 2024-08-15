@@ -13,6 +13,8 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -105,6 +107,8 @@ func (c *EthClientConfig) Check() error {
 
 // EthClient retrieves ethereum data with optimized batch requests, cached results, and flag to not trust the RPC.
 type EthClient struct {
+	preFetchNum int
+
 	client client.RPC
 
 	recProvider ReceiptsProvider
@@ -140,7 +144,23 @@ func NewEthClient(client client.RPC, log log.Logger, metrics caching.Metrics, co
 	if recProvider.isInnerNil() {
 		return nil, fmt.Errorf("failed to open RethDB")
 	}
+
+	preFetchNum := 10
+
+	{
+		envVar := os.Getenv("PRE_FETCH_NUM")
+		if len(envVar) != 0 {
+			var err error
+			preFetchNum, err = strconv.Atoi(envVar)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+
 	return &EthClient{
+		preFetchNum: preFetchNum,
+
 		client:            client,
 		recProvider:       recProvider,
 		trustRPC:          config.TrustRPC,
@@ -268,6 +288,15 @@ func (s *EthClient) InfoByHash(ctx context.Context, hash common.Hash) (eth.Block
 }
 
 func (s *EthClient) InfoByNumber(ctx context.Context, number uint64) (eth.BlockInfo, error) {
+	n := uint64(s.preFetchNum)
+	{
+		for i := uint64(0); i < n; i++ {
+			go (func(num uint64) {
+				s.headerCall(ctx, "eth_getBlockByNumber", numberID(number))
+			})(i)
+		}
+	}
+
 	// can't hit the cache when querying by number due to reorgs.
 	return s.headerCall(ctx, "eth_getBlockByNumber", numberID(number))
 }
@@ -287,6 +316,15 @@ func (s *EthClient) InfoAndTxsByHash(ctx context.Context, hash common.Hash) (eth
 }
 
 func (s *EthClient) InfoAndTxsByNumber(ctx context.Context, number uint64) (eth.BlockInfo, types.Transactions, error) {
+	n := uint64(s.preFetchNum)
+	{
+		for i := uint64(0); i < n; i++ {
+			go (func(num uint64) {
+				s.blockCall(ctx, "eth_getBlockByNumber", numberID(number))
+			})(i)
+		}
+	}
+
 	// can't hit the cache when querying by number due to reorgs.
 	return s.blockCall(ctx, "eth_getBlockByNumber", numberID(number))
 }
@@ -304,6 +342,15 @@ func (s *EthClient) PayloadByHash(ctx context.Context, hash common.Hash) (*eth.E
 }
 
 func (s *EthClient) PayloadByNumber(ctx context.Context, number uint64) (*eth.ExecutionPayloadEnvelope, error) {
+	n := uint64(s.preFetchNum)
+	{
+		for i := uint64(0); i < n; i++ {
+			go (func(num uint64) {
+				s.payloadCall(ctx, "eth_getBlockByNumber", numberID(number))
+			})(i)
+		}
+	}
+
 	return s.payloadCall(ctx, "eth_getBlockByNumber", numberID(number))
 }
 

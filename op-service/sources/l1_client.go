@@ -26,8 +26,8 @@ func L1ClientDefaultConfig(config *rollup.Config, trustRPC bool, kind RPCProvide
 	// Cache 3/2 worth of sequencing window of receipts and txs
 	span := int(config.SeqWindowSize) * 3 / 2
 	fullSpan := span
-	if span > 1000 { // sanity cap. If a large sequencing window is configured, do not make the cache too large
-		span = 1000
+	if span > 10000 { // sanity cap. If a large sequencing window is configured, do not make the cache too large
+		span = 10000
 	}
 	return &L1ClientConfig{
 		EthClientConfig: EthClientConfig{
@@ -36,8 +36,8 @@ func L1ClientDefaultConfig(config *rollup.Config, trustRPC bool, kind RPCProvide
 			TransactionsCacheSize: span,
 			HeadersCacheSize:      span,
 			PayloadsCacheSize:     span,
-			MaxRequestsPerBatch:   20, // TODO: tune batch param
-			MaxConcurrentRequests: 10,
+			MaxRequestsPerBatch:   200, // TODO: tune batch param
+			MaxConcurrentRequests: 100,
 			TrustRPC:              trustRPC,
 			MustBePostMerge:       false,
 			RPCProviderKind:       kind,
@@ -98,6 +98,19 @@ func (s *L1Client) L1BlockRefByNumber(ctx context.Context, num uint64) (eth.L1Bl
 	}
 	ref := eth.InfoToL1BlockRef(info)
 	s.l1BlockRefsCache.Add(ref.Hash, ref)
+
+	// assume all blocks are finalized.
+	// pre fetch
+	{
+		n := 10
+		for i := 0; i < n; i++ {
+			info, err := s.InfoByNumber(ctx, num)
+			if err != nil {
+				return eth.L1BlockRef{}, fmt.Errorf("failed to fetch header by num %d: %w", num, err)
+			}
+			info.
+		}
+	}
 	return ref, nil
 }
 
