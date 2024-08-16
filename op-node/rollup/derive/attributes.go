@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -33,12 +34,15 @@ type FetchingAttributesBuilder struct {
 	l2        SystemConfigL2Fetcher
 	log       log.Logger
 
-	blockWhichNeedFetch map[string]bool
+	blockWhichNeedFetch  map[string]bool
+	blockMapMaxEndNumber uint64
 }
 
 func NewFetchingAttributesBuilder(log log.Logger, rollupCfg *rollup.Config, l1 L1ReceiptsFetcher, l2 SystemConfigL2Fetcher) *FetchingAttributesBuilder {
 
 	blockWhichNeedFetch := make(map[string]bool, 64*1024)
+	var blockEndNumber uint64
+
 	envVar := os.Getenv("BLOCK_TAG_MAP_CONFIG_PATH")
 	if len(envVar) != 0 {
 		blksPath := envVar
@@ -60,6 +64,22 @@ func NewFetchingAttributesBuilder(log log.Logger, rollupCfg *rollup.Config, l1 L
 				blockWhichNeedFetch[blk] = true
 			}
 			log.Warn("The fetching will use a ext block need fetch data", "len", len(blks))
+
+			endEnvVar := os.Getenv("BLOCK_TAG_MAP_END_NUMBER")
+			if len(endEnvVar) != 0 {
+				var err error
+				endNumber, err := strconv.Atoi(endEnvVar)
+				if err != nil {
+					panic(err)
+				}
+
+				blockEndNumber = uint64(endNumber)
+
+				log.Warn("the end block map number", "number", endEnvVar, "value", endNumber)
+			} else {
+				log.Error("NOT SET the end block map number")
+			}
+
 		} else {
 			log.Warn("No blks found", "path", blksPath)
 		}
@@ -68,11 +88,12 @@ func NewFetchingAttributesBuilder(log log.Logger, rollupCfg *rollup.Config, l1 L
 	}
 
 	return &FetchingAttributesBuilder{
-		rollupCfg:           rollupCfg,
-		l1:                  l1,
-		l2:                  l2,
-		log:                 log,
-		blockWhichNeedFetch: blockWhichNeedFetch,
+		rollupCfg:            rollupCfg,
+		l1:                   l1,
+		l2:                   l2,
+		log:                  log,
+		blockWhichNeedFetch:  blockWhichNeedFetch,
+		blockMapMaxEndNumber: blockEndNumber,
 	}
 }
 
@@ -98,7 +119,14 @@ func (ba *FetchingAttributesBuilder) PreparePayloadAttributes(ctx context.Contex
 
 		// TODO: get from map json to check
 		_, isHadDepositAndSystemConfig := ba.blockWhichNeedFetch[epoch.Hash.Hex()]
-		if len(ba.blockWhichNeedFetch) != 0 && !isHadDepositAndSystemConfig {
+		isNoNeedFetch := len(ba.blockWhichNeedFetch) != 0 && !isHadDepositAndSystemConfig
+
+		ba.log.Info("l2 parent block",
+			"isNeedFetch", isHadDepositAndSystemConfig,
+			"l2 parent block", l2Parent.L1Origin.Number,
+			"max", ba.blockMapMaxEndNumber)
+
+		if isNoNeedFetch && l2Parent.L1Origin.Number <= ba.blockMapMaxEndNumber {
 			info, err := ba.l1.InfoByHash(ctx, epoch.Hash)
 			if err != nil {
 				return nil, NewTemporaryError(fmt.Errorf("failed to fetch L1 block info and receipts: %w", err))
