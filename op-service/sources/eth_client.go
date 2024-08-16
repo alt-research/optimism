@@ -13,6 +13,8 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -105,6 +107,8 @@ func (c *EthClientConfig) Check() error {
 
 // EthClient retrieves ethereum data with optimized batch requests, cached results, and flag to not trust the RPC.
 type EthClient struct {
+	preFetchNum int
+
 	client client.RPC
 
 	recProvider ReceiptsProvider
@@ -119,13 +123,28 @@ type EthClient struct {
 	// common.Hash -> types.Transactions
 	transactionsCache *caching.LRUCache[common.Hash, types.Transactions]
 
+	transactionsCacheByNumber *caching.LRUCache[uint64, types.Transactions]
+
 	// cache block headers of blocks by hash
 	// common.Hash -> *HeaderInfo
 	headersCache *caching.LRUCache[common.Hash, eth.BlockInfo]
 
+	headersCacheByNumber *caching.LRUCache[uint64, eth.BlockInfo]
+
 	// cache payloads by hash
 	// common.Hash -> *eth.ExecutionPayload
 	payloadsCache *caching.LRUCache[common.Hash, *eth.ExecutionPayloadEnvelope]
+
+	payloadsCacheByNumber *caching.LRUCache[uint64, *eth.ExecutionPayloadEnvelope]
+
+	// cache receipt by hash
+	// common.Hash -> *eth.ExecutionPayload
+	receiptsCache *caching.LRUCache[common.Hash, receiptsCacheVal]
+}
+
+type receiptsCacheVal struct {
+	block    eth.BlockInfo
+	receipts types.Receipts
 }
 
 // NewEthClient returns an [EthClient], wrapping an RPC with bindings to fetch ethereum data with added error logging,
@@ -140,15 +159,34 @@ func NewEthClient(client client.RPC, log log.Logger, metrics caching.Metrics, co
 	if recProvider.isInnerNil() {
 		return nil, fmt.Errorf("failed to open RethDB")
 	}
+
+	preFetchNum := 20
+	{
+		envVar := os.Getenv("PRE_FETCH_NUM")
+		if len(envVar) != 0 {
+			var err error
+			preFetchNum, err = strconv.Atoi(envVar)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+
 	return &EthClient{
-		client:            client,
-		recProvider:       recProvider,
-		trustRPC:          config.TrustRPC,
-		mustBePostMerge:   config.MustBePostMerge,
-		log:               log,
-		transactionsCache: caching.NewLRUCache[common.Hash, types.Transactions](metrics, "txs", config.TransactionsCacheSize),
-		headersCache:      caching.NewLRUCache[common.Hash, eth.BlockInfo](metrics, "headers", config.HeadersCacheSize),
-		payloadsCache:     caching.NewLRUCache[common.Hash, *eth.ExecutionPayloadEnvelope](metrics, "payloads", config.PayloadsCacheSize),
+		preFetchNum: preFetchNum,
+
+		client:                    client,
+		recProvider:               recProvider,
+		trustRPC:                  config.TrustRPC,
+		mustBePostMerge:           config.MustBePostMerge,
+		log:                       log,
+		transactionsCache:         caching.NewLRUCache[common.Hash, types.Transactions](metrics, "txs", config.TransactionsCacheSize),
+		transactionsCacheByNumber: caching.NewLRUCache[uint64, types.Transactions](metrics, "txsByNumber", config.TransactionsCacheSize),
+		headersCache:              caching.NewLRUCache[common.Hash, eth.BlockInfo](metrics, "headers", config.HeadersCacheSize),
+		headersCacheByNumber:      caching.NewLRUCache[uint64, eth.BlockInfo](metrics, "headersByNumber", config.HeadersCacheSize),
+		payloadsCache:             caching.NewLRUCache[common.Hash, *eth.ExecutionPayloadEnvelope](metrics, "payloads", config.PayloadsCacheSize),
+		payloadsCacheByNumber:     caching.NewLRUCache[uint64, *eth.ExecutionPayloadEnvelope](metrics, "payloadsByNumber", config.PayloadsCacheSize),
+		receiptsCache:             caching.NewLRUCache[common.Hash, receiptsCacheVal](metrics, "receipts", config.PayloadsCacheSize),
 	}, nil
 }
 
@@ -206,6 +244,7 @@ func (s *EthClient) headerCall(ctx context.Context, method string, id rpcBlockID
 		return nil, fmt.Errorf("fetched block header does not match requested ID: %w", err)
 	}
 	s.headersCache.Add(info.Hash(), info)
+	s.headersCacheByNumber.Add(info.NumberU64(), info)
 	return info, nil
 }
 
@@ -226,7 +265,9 @@ func (s *EthClient) blockCall(ctx context.Context, method string, id rpcBlockID)
 		return nil, nil, fmt.Errorf("fetched block data does not match requested ID: %w", err)
 	}
 	s.headersCache.Add(info.Hash(), info)
+	s.headersCacheByNumber.Add(info.NumberU64(), info)
 	s.transactionsCache.Add(info.Hash(), txs)
+	s.transactionsCacheByNumber.Add(info.NumberU64(), txs)
 	return info, txs, nil
 }
 
@@ -247,6 +288,7 @@ func (s *EthClient) payloadCall(ctx context.Context, method string, id rpcBlockI
 		return nil, fmt.Errorf("fetched payload does not match requested ID: %w", err)
 	}
 	s.payloadsCache.Add(envelope.ExecutionPayload.BlockHash, envelope)
+	s.payloadsCacheByNumber.Add(uint64(envelope.ExecutionPayload.BlockNumber), envelope)
 	return envelope, nil
 }
 
@@ -264,17 +306,55 @@ func (s *EthClient) InfoByHash(ctx context.Context, hash common.Hash) (eth.Block
 	if header, ok := s.headersCache.Get(hash); ok {
 		return header, nil
 	}
-	return s.headerCall(ctx, "eth_getBlockByHash", hashID(hash))
+	info, err := s.headerCall(ctx, "eth_getBlockByHash", hashID(hash))
+	if err != nil {
+		return nil, err
+	}
+	n := uint64(s.preFetchNum)
+	{
+		for i := uint64(0); i < n; i++ {
+			go (func(num uint64) {
+				s.headerCall(ctx, "eth_getBlockByNumber", numberID(info.NumberU64()+num))
+			})(i)
+		}
+	}
+
+	return info, err
 }
 
 func (s *EthClient) InfoByNumber(ctx context.Context, number uint64) (eth.BlockInfo, error) {
+	if header, ok := s.headersCacheByNumber.Get(number); ok {
+		return header, nil
+	}
+
+	n := uint64(s.preFetchNum)
+	{
+		for i := uint64(0); i < n; i++ {
+			go (func(num uint64) {
+				s.headerCall(ctx, "eth_getBlockByNumber", numberID(number+num))
+			})(i)
+		}
+	}
+
 	// can't hit the cache when querying by number due to reorgs.
 	return s.headerCall(ctx, "eth_getBlockByNumber", numberID(number))
 }
 
 func (s *EthClient) InfoByLabel(ctx context.Context, label eth.BlockLabel) (eth.BlockInfo, error) {
+	info, err := s.headerCall(ctx, "eth_getBlockByNumber", label)
+	if err != nil {
+		return nil, err
+	}
+	n := uint64(s.preFetchNum)
+	{
+		for i := uint64(0); i < n; i++ {
+			go (func(num uint64) {
+				s.headerCall(ctx, "eth_getBlockByNumber", numberID(info.NumberU64()+num))
+			})(i)
+		}
+	}
 	// can't hit the cache when querying the head due to reorgs / changes.
-	return s.headerCall(ctx, "eth_getBlockByNumber", label)
+	return info, err
 }
 
 func (s *EthClient) InfoAndTxsByHash(ctx context.Context, hash common.Hash) (eth.BlockInfo, types.Transactions, error) {
@@ -283,38 +363,157 @@ func (s *EthClient) InfoAndTxsByHash(ctx context.Context, hash common.Hash) (eth
 			return header, txs, nil
 		}
 	}
-	return s.blockCall(ctx, "eth_getBlockByHash", hashID(hash))
+
+	info, txs, err := s.blockCall(ctx, "eth_getBlockByHash", hashID(hash))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	n := uint64(s.preFetchNum)
+	{
+		for i := uint64(0); i < n; i++ {
+			go (func(num uint64) {
+				s.blockCall(ctx, "eth_getBlockByNumber", numberID(info.NumberU64()+num))
+			})(i)
+		}
+	}
+
+	return info, txs, err
 }
 
 func (s *EthClient) InfoAndTxsByNumber(ctx context.Context, number uint64) (eth.BlockInfo, types.Transactions, error) {
-	// can't hit the cache when querying by number due to reorgs.
-	return s.blockCall(ctx, "eth_getBlockByNumber", numberID(number))
+	if header, ok := s.headersCacheByNumber.Get(number); ok {
+		if txs, ok := s.transactionsCacheByNumber.Get(number); ok {
+			return header, txs, nil
+		}
+	}
+
+	info, txs, err := s.blockCall(ctx, "eth_getBlockByNumber", numberID(number))
+	if err != nil {
+		return nil, nil, err
+	}
+	n := uint64(s.preFetchNum)
+	{
+		for i := uint64(0); i < n; i++ {
+			go (func(num uint64) {
+				s.blockCall(ctx, "eth_getBlockByNumber", numberID(number+num))
+			})(i)
+		}
+	}
+
+	return info, txs, err
 }
 
 func (s *EthClient) InfoAndTxsByLabel(ctx context.Context, label eth.BlockLabel) (eth.BlockInfo, types.Transactions, error) {
 	// can't hit the cache when querying the head due to reorgs / changes.
-	return s.blockCall(ctx, "eth_getBlockByNumber", label)
+	info, txs, err := s.blockCall(ctx, "eth_getBlockByNumber", label)
+
+	n := uint64(s.preFetchNum)
+	{
+		for i := uint64(0); i < n; i++ {
+			go (func(num uint64) {
+				s.blockCall(ctx, "eth_getBlockByNumber", numberID(info.NumberU64()+num))
+			})(i)
+		}
+	}
+
+	return info, txs, err
 }
 
 func (s *EthClient) PayloadByHash(ctx context.Context, hash common.Hash) (*eth.ExecutionPayloadEnvelope, error) {
 	if payload, ok := s.payloadsCache.Get(hash); ok {
 		return payload, nil
 	}
-	return s.payloadCall(ctx, "eth_getBlockByHash", hashID(hash))
+
+	res, err := s.payloadCall(ctx, "eth_getBlockByHash", hashID(hash))
+	if err != nil {
+		return nil, err
+	}
+	number := uint64(res.ExecutionPayload.BlockNumber)
+	n := uint64(s.preFetchNum)
+	{
+		for i := uint64(0); i < n; i++ {
+			go (func(num uint64) {
+				s.payloadCall(ctx, "eth_getBlockByNumber", numberID(number+num))
+			})(i)
+		}
+	}
+
+	return res, err
 }
 
 func (s *EthClient) PayloadByNumber(ctx context.Context, number uint64) (*eth.ExecutionPayloadEnvelope, error) {
-	return s.payloadCall(ctx, "eth_getBlockByNumber", numberID(number))
-}
+	if payload, ok := s.payloadsCacheByNumber.Get(number); ok {
+		return payload, nil
+	}
 
+	res, err := s.payloadCall(ctx, "eth_getBlockByNumber", numberID(number))
+	if err != nil {
+		return nil, err
+	}
+	n := uint64(s.preFetchNum)
+	{
+		for i := uint64(0); i < n; i++ {
+			go (func(num uint64) {
+				s.payloadCall(ctx, "eth_getBlockByNumber", numberID(number+num))
+			})(i)
+		}
+	}
+
+	return res, err
+}
 func (s *EthClient) PayloadByLabel(ctx context.Context, label eth.BlockLabel) (*eth.ExecutionPayloadEnvelope, error) {
-	return s.payloadCall(ctx, "eth_getBlockByNumber", label)
+	res, err := s.payloadCall(ctx, "eth_getBlockByNumber", label)
+	if err != nil {
+		return nil, err
+	}
+	number := uint64(res.ExecutionPayload.BlockNumber)
+	n := uint64(s.preFetchNum)
+	{
+		for i := uint64(0); i < n; i++ {
+			go (func(num uint64) {
+				s.payloadCall(ctx, "eth_getBlockByNumber", numberID(number+num))
+			})(i)
+		}
+	}
+
+	return res, err
 }
 
 // FetchReceipts returns a block info and all of the receipts associated with transactions in the block.
 // It verifies the receipt hash in the block header against the receipt hash of the fetched receipts
 // to ensure that the execution engine did not fail to return any receipts.
 func (s *EthClient) FetchReceipts(ctx context.Context, blockHash common.Hash) (eth.BlockInfo, types.Receipts, error) {
+	if val, ok := s.receiptsCache.Get(blockHash); ok {
+		return val.block, val.receipts, nil
+	}
+
+	info, receipts, err := s.fetchReceipts(ctx, blockHash)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	number := info.NumberU64()
+	n := uint64(s.preFetchNum)
+	{
+		for i := uint64(0); i < n; i++ {
+			go (func(num uint64) {
+				info, _, err := s.InfoAndTxsByNumber(ctx, number+num)
+				if err != nil {
+					return
+				}
+				s.fetchReceipts(ctx, info.Hash())
+			})(i)
+		}
+	}
+
+	return info, receipts, err
+}
+
+// FetchReceipts returns a block info and all of the receipts associated with transactions in the block.
+// It verifies the receipt hash in the block header against the receipt hash of the fetched receipts
+// to ensure that the execution engine did not fail to return any receipts.
+func (s *EthClient) fetchReceipts(ctx context.Context, blockHash common.Hash) (eth.BlockInfo, types.Receipts, error) {
 	info, txs, err := s.InfoAndTxsByHash(ctx, blockHash)
 	if err != nil {
 		return nil, nil, fmt.Errorf("querying block: %w", err)
@@ -325,6 +524,8 @@ func (s *EthClient) FetchReceipts(ctx context.Context, blockHash common.Hash) (e
 	if err != nil {
 		return nil, nil, err
 	}
+
+	s.receiptsCache.Add(blockHash, receiptsCacheVal{block: info, receipts: receipts})
 	return info, receipts, nil
 }
 
