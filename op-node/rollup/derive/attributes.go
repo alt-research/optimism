@@ -37,29 +37,34 @@ type FetchingAttributesBuilder struct {
 }
 
 func NewFetchingAttributesBuilder(log log.Logger, rollupCfg *rollup.Config, l1 L1ReceiptsFetcher, l2 SystemConfigL2Fetcher) *FetchingAttributesBuilder {
-	blksPath := "./blkHashMap.json"
+
 	blockWhichNeedFetch := make(map[string]bool, 64*1024)
+	envVar := os.Getenv("BLOCK_TAG_MAP_CONFIG_PATH")
+	if len(envVar) != 0 {
+		blksPath := envVar
+		_, err := os.Stat(blksPath)
+		if err == nil {
+			content, err := os.ReadFile(blksPath)
+			if err != nil {
+				log.Error("Error when opening file", "err", err)
+				panic(err)
+			}
 
-	_, err := os.Stat(blksPath)
-	if err == nil {
-		content, err := os.ReadFile(blksPath)
-		if err != nil {
-			log.Error("Error when opening file", "err", err)
-			panic(err)
-		}
+			blks := make([]string, 0, 64*1024)
+			err = json.Unmarshal(content, &blks)
+			if err != nil {
+				log.Error("Error during Unmarshal()", "err", err)
+			}
 
-		blks := make([]string, 0, 64*1024)
-		err = json.Unmarshal(content, &blks)
-		if err != nil {
-			log.Error("Error during Unmarshal()", "err", err)
+			for _, blk := range blks {
+				blockWhichNeedFetch[blk] = true
+			}
+			log.Warn("The fetching will use a ext block need fetch data", "len", len(blks))
+		} else {
+			log.Warn("No blks found", "path", blksPath)
 		}
-
-		for _, blk := range blks {
-			blockWhichNeedFetch[blk] = true
-		}
-		log.Warn("The fetching will use a ext block need fetch data", "len", len(blks))
 	} else {
-		log.Warn("No blks found", "path", blksPath)
+		log.Warn("No use block tag with BLOCK_TAG_MAP_CONFIG_PATH")
 	}
 
 	return &FetchingAttributesBuilder{
