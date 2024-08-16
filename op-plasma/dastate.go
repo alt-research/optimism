@@ -171,9 +171,24 @@ func (s *State) GetResolvedInput(key []byte) ([]byte, error) {
 // as expired based on the new latest l1 origin. If any active challenges are expired
 // it returns an error to signal that a derivation pipeline reset is required.
 func (s *State) ExpireChallenges(bn uint64) (uint64, error) {
+	s.log.Info(
+		"Before ExpireChallenges",
+		"bn", bn,
+		"activeCommsLen", s.activeComms.Len(),
+		"expiredCommsLen", s.expiredComms.Len(),
+		"finalized", s.finalized,
+	)
+
 	var err error
 	if s.activeComms.Len() > 0 {
-		s.log.Debug("expire challenges", "bn", bn, "blockNumber", s.activeComms[0].blockNumber, "expireAt", s.activeComms[0].expiresAt)
+		s.log.Info(
+			"expire challenges",
+			"bn", bn,
+			"blockNumber", s.activeComms[0].blockNumber,
+			"expireAt", s.activeComms[0].expiresAt,
+			"isExpires", s.activeComms[0].expiresAt <= bn,
+			"isFinalized", s.activeComms[0].blockNumber >= s.finalized,
+		)
 	}
 	for s.activeComms.Len() > 0 && s.activeComms[0].expiresAt <= bn && s.activeComms[0].blockNumber >= s.finalized {
 		// move from the active to the expired queue
@@ -182,11 +197,20 @@ func (s *State) ExpireChallenges(bn uint64) (uint64, error) {
 
 		if c.canonical {
 			// advance finalized head only if the commitment was derived as part of the canonical chain
+			s.log.Info(
+				"Set finalized by canonical",
+				"number", c.blockNumber,
+				"expiresAt", c.expiresAt,
+				"challengeStatus", c.challengeStatus,
+			)
 			s.finalized = c.blockNumber
 		}
 
 		// active mark as expired so it is skipped in the derivation pipeline
 		if c.challengeStatus == ChallengeActive {
+			s.log.Info(
+				"Set challengeStatus by ChallengeExpired from ChallengeActive",
+			)
 			c.challengeStatus = ChallengeExpired
 
 			// only reorg if canonical. If the pipeline is behind, it will just
@@ -198,6 +222,14 @@ func (s *State) ExpireChallenges(bn uint64) (uint64, error) {
 			}
 		}
 	}
+
+	s.log.Info(
+		"After ExpireChallenges",
+		"bn", bn,
+		"activeCommsLen", s.activeComms.Len(),
+		"expiredCommsLen", s.expiredComms.Len(),
+		"finalized", s.finalized,
+	)
 
 	return s.finalized, err
 }
@@ -224,6 +256,7 @@ func (s *State) Prune(bn uint64) {
 // In case of L1 reorg, state should be cleared so we can sync all the challenge events
 // from scratch.
 func (s *State) Reset() {
+	s.log.Warn("Reset State finalized")
 	s.activeComms = s.activeComms[:0]
 	s.expiredComms = s.expiredComms[:0]
 	s.finalized = 0

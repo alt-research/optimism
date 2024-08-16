@@ -239,12 +239,23 @@ func (d *DA) isExpired(bn uint64) bool {
 // as the new head for tracking challenges. If forwards an error if any new challenge have expired to
 // trigger a derivation reset.
 func (d *DA) AdvanceL1Origin(ctx context.Context, l1 L1Fetcher, block eth.BlockID) error {
+	d.log.Info(
+		"AdvanceL1Origin",
+		"blockNumber", block.Number,
+		"originNumber", d.origin.Number,
+		"finalizedHead", d.finalizedHead.Number)
+
 	// do not repeat for the old origin
 	if block.Number < d.origin.Number {
+		d.log.Info(
+			"Do not repeat for the old",
+			"blockNumber", block.Number,
+			"originNumber", d.origin.Number)
 		return nil
 	}
 	// sync challenges for the given block ID
 	if err := d.LoadChallengeEvents(ctx, l1, block); err != nil {
+		d.log.Warn("LoadChallengeEvents error", "err", err.Error())
 		return err
 	}
 	// advance challenge window, computing the finalized head
@@ -252,20 +263,31 @@ func (d *DA) AdvanceL1Origin(ctx context.Context, l1 L1Fetcher, block eth.BlockI
 	if err != nil {
 		// warn the reset function not to clear the state
 		d.resetting = true
+		d.log.Warn("ExpireChallenges error", "err", err.Error())
 		return err
 	}
+
+	d.log.Info(
+		"ExpireChallenges Got success",
+		"return", bn,
+		"finalizedHead", d.finalizedHead.Number)
 
 	// finalized head signal is called only when the finalized head number increases
 	// and the l1 finalized head ahead of the DA finalized head.
 	if bn > d.finalizedHead.Number {
 		ref, err := l1.L1BlockRefByNumber(ctx, bn)
 		if err != nil {
+			d.log.Warn("L1BlockRefByNumber error", "err", err.Error())
 			return err
 		}
 		d.metrics.RecordChallengesHead("finalized", bn)
 
 		// keep track of finalized had so it can be picked up by the
 		// l1 finalization signal
+		d.log.Info(
+			"Set finalizedHead success",
+			"finalizedHeadNumber", ref.Number,
+			"oldfinalizedHead", d.finalizedHead.Number)
 		d.finalizedHead = ref
 	}
 	d.origin = block
