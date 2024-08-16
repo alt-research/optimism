@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"os"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -28,17 +29,19 @@ var (
 		"kind",
 		"state",
 	})
-	kindPut      = "put"
-	kindGet      = "get"
-	stateSuccess = "success"
-	stateFailure = "failure"
+	kindPut         = "put"
+	kindGet         = "get"
+	stateSuccess    = "success"
+	stateFailure    = "failure"
+	s3LocalCacheDir = ""
 )
 
 type S3Config struct {
-	Enable   bool   `env:"S3_ENABLE"`
-	Bucket   string `env:"AWS_S3_BUCKET"`
-	Endpoint string `env:"AWS_ENDPOINT"`
-	Region   string `env:"AWS_REGION"`
+	Enable     bool   `env:"S3_ENABLE"`
+	LocalCache string `env:"S3_LOCAL_CACHE"`
+	Bucket     string `env:"AWS_S3_BUCKET"`
+	Endpoint   string `env:"AWS_ENDPOINT"`
+	Region     string `env:"AWS_REGION"`
 }
 
 func (s S3Config) sanitize() error {
@@ -84,6 +87,15 @@ func Init(c *S3Config) error {
 	})
 
 	prometheus.MustRegister(metrics)
+
+	if conf.LocalCache != "" {
+		s3LocalCacheDir = conf.LocalCache
+	}
+	if _, err := os.Stat(s3LocalCacheDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(s3LocalCacheDir, 0755); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -116,11 +128,21 @@ func Put(ctx context.Context, log log.Logger, data []byte) (*calldata.Calldata, 
 }
 
 func Get(ctx context.Context, log log.Logger, d *calldata.Digest) ([]byte, error) {
+	key := hex.EncodeToString(d.GetPayload())
 	log.Info(
 		"trying to get data from s3",
-		"digest", hex.EncodeToString(d.GetPayload()),
+		"digest", key,
 	)
-	key := hex.EncodeToString(d.GetPayload())
+	if s3LocalCacheDir != "" {
+		if v, err := os.ReadFile(s3LocalCacheDir + "/" + key); err == nil {
+			log.Info(
+				"successfully get data from local cache",
+				"digest", key,
+			)
+			return v, nil
+		}
+	}
+
 	result, err := client.GetObject(ctx, &awss3.GetObjectInput{
 		Bucket: aws.String(conf.Bucket),
 		Key:    aws.String(key),
