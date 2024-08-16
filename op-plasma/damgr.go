@@ -121,8 +121,9 @@ func (d *DA) Finalize(l1Finalized eth.L1BlockRef) {
 	ref := d.finalizedHead
 	d.log.Info("received l1 finalized signal, forwarding to engine queue", "l1", l1Finalized, "plasma", ref)
 	// if the l1 finalized head is behind it is the finalized head
-	if l1Finalized.Number < d.finalizedHead.Number {
+	if l1Finalized.Number >= d.finalizedHead.Number {
 		ref = l1Finalized
+		d.log.Info("Set ref to larger finalized number", "l1Finalized.Number", l1Finalized.Number, "d.finalizedHead.Number", d.finalizedHead.Number)
 	}
 	// prune finalized state
 	d.state.Prune(ref.Number)
