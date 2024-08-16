@@ -237,6 +237,11 @@ func (eq *EngineQueue) AddUnsafePayload(envelope *eth.ExecutionPayloadEnvelope) 
 }
 
 func (eq *EngineQueue) Finalize(l1Origin eth.L1BlockRef) {
+	eq.log.Info(
+		"EngineQueue Finalize",
+		"l1Block", l1Origin.Number,
+		"l1Hash", l1Origin.Hash,
+		"eq.finalizedL1", eq.finalizedL1)
 	prevFinalizedL1 := eq.finalizedL1
 	if l1Origin.Number < eq.finalizedL1.Number {
 		eq.log.Error("ignoring old L1 finalized block signal! Is the L1 provider corrupted?", "prev_finalized_l1", prevFinalizedL1, "signaled_finalized_l1", l1Origin)
@@ -252,7 +257,20 @@ func (eq *EngineQueue) Finalize(l1Origin eth.L1BlockRef) {
 	// and tryFinalizeL1Origin() will eventually detect that we are on the wrong chain,
 	// if not resetting due to reorg elsewhere already.
 	for _, fd := range eq.finalityData {
+		eq.log.Info(
+			"finalityData",
+			"fd l1Block", fd.L1Block,
+			"l1Origin", l1Origin.ID(),
+			"fd", fd.L2Block.Number,
+			"fd Hash", fd.L2Block.Hash)
+
 		if fd.L1Block == l1Origin.ID() {
+			eq.log.Info(
+				"tryFinalizeL2",
+				"fd l1Block", fd.L1Block,
+				"l1Origin", l1Origin.ID(),
+				"fd", fd.L2Block.Number,
+				"fd Hash", fd.L2Block.Hash)
 			eq.tryFinalizeL2()
 			return
 		}
@@ -417,18 +435,33 @@ func (eq *EngineQueue) tryFinalizePastL2Blocks(ctx context.Context) error {
 // and then marks the latest fully derived L2 block from this as finalized,
 // or defaults to the current finalized L2 block.
 func (eq *EngineQueue) tryFinalizeL2() {
+	eq.log.Info("tryFinalizeL2", "l1", eq.finalizedL1.Number)
 	if eq.finalizedL1 == (eth.L1BlockRef{}) {
+		eq.log.Warn("tryFinalizeL2 return by no finalized L1 block")
 		return // if no L1 information is finalized yet, then skip this
 	}
 	eq.triedFinalizeAt = eq.origin
 	// default to keep the same finalized block
 	finalizedL2 := eq.ec.Finalized()
+	eq.log.Info("tryFinalizeL2", "finalizedL2", eq.finalizedL1.Number)
 	// go through the latest inclusion data, and find the last L2 block that was derived from a finalized L1 block
 	for _, fd := range eq.finalityData {
+		eq.log.Info(
+			"tryFinalizeL2 fin fds",
+			"fd", fd.L2Block.Number,
+			"finalizedL2", finalizedL2.Number,
+			"l1Block", fd.L1Block.Number,
+			"finalizedL1", eq.finalizedL1.Number)
 		if fd.L2Block.Number > finalizedL2.Number && fd.L1Block.Number <= eq.finalizedL1.Number {
+			eq.log.Info(
+				"Set FinalizeL2 fin fds",
+				"finalizedL2", fd.L2Block.Number)
 			finalizedL2 = fd.L2Block
 		}
 	}
+	eq.log.Info(
+		"Currently FinalizeL2 fin fds",
+		"finalizedL2", finalizedL2.Number)
 	eq.ec.SetFinalizedHead(finalizedL2)
 }
 
