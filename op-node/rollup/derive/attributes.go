@@ -2,11 +2,14 @@ package derive
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ethereum-optimism/optimism/op-bindings/predeploys"
 	"github.com/ethereum-optimism/optimism/op-node/rollup"
@@ -28,13 +31,43 @@ type FetchingAttributesBuilder struct {
 	rollupCfg *rollup.Config
 	l1        L1ReceiptsFetcher
 	l2        SystemConfigL2Fetcher
+	log       log.Logger
+
+	blockWhichNeedFetch map[string]bool
 }
 
-func NewFetchingAttributesBuilder(rollupCfg *rollup.Config, l1 L1ReceiptsFetcher, l2 SystemConfigL2Fetcher) *FetchingAttributesBuilder {
+func NewFetchingAttributesBuilder(log log.Logger, rollupCfg *rollup.Config, l1 L1ReceiptsFetcher, l2 SystemConfigL2Fetcher) *FetchingAttributesBuilder {
+	blksPath := "./blkHashMap.json"
+	blockWhichNeedFetch := make(map[string]bool, 64*1024)
+
+	_, err := os.Stat(blksPath)
+	if err == nil {
+		content, err := os.ReadFile(blksPath)
+		if err != nil {
+			log.Error("Error when opening file", "err", err)
+			panic(err)
+		}
+
+		blks := make([]string, 0, 64*1024)
+		err = json.Unmarshal(content, &blks)
+		if err != nil {
+			log.Error("Error during Unmarshal()", "err", err)
+		}
+
+		for _, blk := range blks {
+			blockWhichNeedFetch[blk] = true
+		}
+		log.Warn("The fetching will use a ext block need fetch data", "len", len(blks))
+	} else {
+		log.Warn("No blks found", "path", blksPath)
+	}
+
 	return &FetchingAttributesBuilder{
-		rollupCfg: rollupCfg,
-		l1:        l1,
-		l2:        l2,
+		rollupCfg:           rollupCfg,
+		l1:                  l1,
+		l2:                  l2,
+		log:                 log,
+		blockWhichNeedFetch: blockWhichNeedFetch,
 	}
 }
 
@@ -57,29 +90,62 @@ func (ba *FetchingAttributesBuilder) PreparePayloadAttributes(ctx context.Contex
 	// case we need to fetch all transaction receipts from the L1 origin block so we can scan for
 	// user deposits.
 	if l2Parent.L1Origin.Number != epoch.Number {
-		info, receipts, err := ba.l1.FetchReceipts(ctx, epoch.Hash)
-		if err != nil {
-			return nil, NewTemporaryError(fmt.Errorf("failed to fetch L1 block info and receipts: %w", err))
-		}
-		if l2Parent.L1Origin.Hash != info.ParentHash() {
-			return nil, NewResetError(
-				fmt.Errorf("cannot create new block with L1 origin %s (parent %s) on top of L1 origin %s",
-					epoch, info.ParentHash(), l2Parent.L1Origin))
-		}
 
-		deposits, err := DeriveDeposits(receipts, ba.rollupCfg.DepositContractAddress)
-		if err != nil {
-			// deposits may never be ignored. Failing to process them is a critical error.
-			return nil, NewCriticalError(fmt.Errorf("failed to derive some deposits: %w", err))
-		}
-		// apply sysCfg changes
-		if err := UpdateSystemConfigWithL1Receipts(&sysConfig, receipts, ba.rollupCfg, info.Time()); err != nil {
-			return nil, NewCriticalError(fmt.Errorf("failed to apply derived L1 sysCfg updates: %w", err))
-		}
+		// TODO: get from map json to check
+		_, isHadDepositAndSystemConfig := ba.blockWhichNeedFetch[epoch.Hash.String()]
+		if len(ba.blockWhichNeedFetch) != 0 && !isHadDepositAndSystemConfig {
+			info, err := ba.l1.InfoByHash(ctx, epoch.Hash)
+			if err != nil {
+				return nil, NewTemporaryError(fmt.Errorf("failed to fetch L1 block info and receipts: %w", err))
+			}
 
-		l1Info = info
-		depositTxs = deposits
-		seqNumber = 0
+			ba.log.Warn("Skip the block fetch because not in map", "number", info.NumberU64(), "hash", epoch.Hash)
+
+			// no need use FetchReceipts
+			if l2Parent.L1Origin.Hash != info.ParentHash() {
+				return nil, NewResetError(
+					fmt.Errorf("cannot create new block with L1 origin %s (parent %s) on top of L1 origin %s",
+						epoch, info.ParentHash(), l2Parent.L1Origin))
+			}
+
+			// is no deposit so just use a nil
+			deposits, err := DeriveDeposits([]*types.Receipt{}, ba.rollupCfg.DepositContractAddress)
+			if err != nil {
+				// deposits may never be ignored. Failing to process them is a critical error.
+				return nil, NewCriticalError(fmt.Errorf("failed to derive some deposits: %w", err))
+			}
+			// apply sysCfg changes
+			// no changes
+
+			l1Info = info
+			depositTxs = deposits
+			seqNumber = 0
+		} else {
+			// original logic
+			info, receipts, err := ba.l1.FetchReceipts(ctx, epoch.Hash)
+			if err != nil {
+				return nil, NewTemporaryError(fmt.Errorf("failed to fetch L1 block info and receipts: %w", err))
+			}
+			if l2Parent.L1Origin.Hash != info.ParentHash() {
+				return nil, NewResetError(
+					fmt.Errorf("cannot create new block with L1 origin %s (parent %s) on top of L1 origin %s",
+						epoch, info.ParentHash(), l2Parent.L1Origin))
+			}
+
+			deposits, err := DeriveDeposits(receipts, ba.rollupCfg.DepositContractAddress)
+			if err != nil {
+				// deposits may never be ignored. Failing to process them is a critical error.
+				return nil, NewCriticalError(fmt.Errorf("failed to derive some deposits: %w", err))
+			}
+			// apply sysCfg changes
+			if err := UpdateSystemConfigWithL1Receipts(&sysConfig, receipts, ba.rollupCfg, info.Time()); err != nil {
+				return nil, NewCriticalError(fmt.Errorf("failed to apply derived L1 sysCfg updates: %w", err))
+			}
+
+			l1Info = info
+			depositTxs = deposits
+			seqNumber = 0
+		}
 	} else {
 		if l2Parent.L1Origin.Hash != epoch.Hash {
 			return nil, NewResetError(fmt.Errorf("cannot create new block with L1 origin %s in conflict with L1 origin %s", epoch, l2Parent.L1Origin))

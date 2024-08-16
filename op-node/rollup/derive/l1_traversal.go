@@ -70,14 +70,19 @@ func (l1t *L1Traversal) AdvanceL1Block(ctx context.Context) error {
 		return NewResetError(fmt.Errorf("detected L1 reorg from %s to %s with conflicting parent %s", l1t.block, nextL1Origin, nextL1Origin.ParentID()))
 	}
 
-	// Parse L1 receipts of the given block and update the L1 system configuration
-	_, receipts, err := l1t.l1Blocks.FetchReceipts(ctx, nextL1Origin.Hash)
-	if err != nil {
-		return NewTemporaryError(fmt.Errorf("failed to fetch receipts of L1 block %s (parent: %s) for L1 sysCfg update: %w", nextL1Origin, origin, err))
-	}
-	if err := UpdateSystemConfigWithL1Receipts(&l1t.sysCfg, receipts, l1t.cfg, nextL1Origin.Time); err != nil {
-		// the sysCfg changes should always be formatted correctly.
-		return NewCriticalError(fmt.Errorf("failed to update L1 sysCfg with receipts from block %s: %w", nextL1Origin, err))
+	// FIXME: in all mainnet only block 37331537 the 0x1a6f69e62ecb37555ca0ea224ef891005bb222f68b52e74297fcb282d4678ad9 tx
+	// have the system config update, so we can not need fetch!
+	if nextL1Origin.Hash.Hex() == "0x1405620b142fbda295e314e79eeec1162493ee42aebd9bbe77b50bf277e46e4a" {
+		l1t.log.Warn("call nextL1Origin")
+		// Parse L1 receipts of the given block and update the L1 system configuration
+		_, receipts, err := l1t.l1Blocks.FetchReceipts(ctx, nextL1Origin.Hash)
+		if err != nil {
+			return NewTemporaryError(fmt.Errorf("failed to fetch receipts of L1 block %s (parent: %s) for L1 sysCfg update: %w", nextL1Origin, origin, err))
+		}
+		if err := UpdateSystemConfigWithL1Receipts(&l1t.sysCfg, receipts, l1t.cfg, nextL1Origin.Time); err != nil {
+			// the sysCfg changes should always be formatted correctly.
+			return NewCriticalError(fmt.Errorf("failed to update L1 sysCfg with receipts from block %s: %w", nextL1Origin, err))
+		}
 	}
 
 	l1t.block = nextL1Origin
