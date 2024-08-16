@@ -92,7 +92,7 @@ func (ba *FetchingAttributesBuilder) PreparePayloadAttributes(ctx context.Contex
 	if l2Parent.L1Origin.Number != epoch.Number {
 
 		// TODO: get from map json to check
-		_, isHadDepositAndSystemConfig := ba.blockWhichNeedFetch[epoch.Hash.String()]
+		_, isHadDepositAndSystemConfig := ba.blockWhichNeedFetch[epoch.Hash.Hex()]
 		if len(ba.blockWhichNeedFetch) != 0 && !isHadDepositAndSystemConfig {
 			info, err := ba.l1.InfoByHash(ctx, epoch.Hash)
 			if err != nil {
