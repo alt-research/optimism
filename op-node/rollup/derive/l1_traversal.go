@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"strings"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
@@ -29,15 +31,36 @@ type L1Traversal struct {
 	log      log.Logger
 	sysCfg   eth.SystemConfig
 	cfg      *rollup.Config
+
+	configUpgradeBlocksMap map[string]bool
 }
 
 var _ ResettableStage = (*L1Traversal)(nil)
 
 func NewL1Traversal(log log.Logger, cfg *rollup.Config, l1Blocks L1BlockRefByNumberFetcher) *L1Traversal {
+	configUpgradeBlocksMap := make(map[string]bool)
+
+	envVar := os.Getenv("CONFIG_UPDATE_BLOCKS")
+	if len(envVar) != 0 {
+		configUpgradeBlocks := strings.Split(envVar, ",")
+		for _, blk := range configUpgradeBlocks {
+			log.Warn("Use of configUpgradeBlocks", "hash", blk)
+			configUpgradeBlocksMap[blk] = true
+		}
+	} else {
+		log.Warn("No CONFIG_UPDATE_BLOCKS found")
+	}
+
+	// TODO: for xertio, different block hash between different block chain
+	// so just add
+	configUpgradeBlocksMap["0x1405620b142fbda295e314e79eeec1162493ee42aebd9bbe77b50bf277e46e4a"] = true
+
 	return &L1Traversal{
 		log:      log,
 		l1Blocks: l1Blocks,
 		cfg:      cfg,
+
+		configUpgradeBlocksMap: configUpgradeBlocksMap,
 	}
 }
 
@@ -70,14 +93,22 @@ func (l1t *L1Traversal) AdvanceL1Block(ctx context.Context) error {
 		return NewResetError(fmt.Errorf("detected L1 reorg from %s to %s with conflicting parent %s", l1t.block, nextL1Origin, nextL1Origin.ParentID()))
 	}
 
-	// Parse L1 receipts of the given block and update the L1 system configuration
-	_, receipts, err := l1t.l1Blocks.FetchReceipts(ctx, nextL1Origin.Hash)
-	if err != nil {
-		return NewTemporaryError(fmt.Errorf("failed to fetch receipts of L1 block %s (parent: %s) for L1 sysCfg update: %w", nextL1Origin, origin, err))
-	}
-	if err := UpdateSystemConfigWithL1Receipts(&l1t.sysCfg, receipts, l1t.cfg, nextL1Origin.Time); err != nil {
-		// the sysCfg changes should always be formatted correctly.
-		return NewCriticalError(fmt.Errorf("failed to update L1 sysCfg with receipts from block %s: %w", nextL1Origin, err))
+	// FIXME: in all mainnet only block 37331537 the 0x1a6f69e62ecb37555ca0ea224ef891005bb222f68b52e74297fcb282d4678ad9 tx
+	// have the system config update, so we can not need fetch!
+	_, isInMap := l1t.configUpgradeBlocksMap[nextL1Origin.Hash.Hex()]
+	if isInMap {
+		l1t.log.Warn("call nextL1Origin",
+			"hash", nextL1Origin.Hash.Hex(),
+			"number", nextL1Origin.Number)
+		// Parse L1 receipts of the given block and update the L1 system configuration
+		_, receipts, err := l1t.l1Blocks.FetchReceipts(ctx, nextL1Origin.Hash)
+		if err != nil {
+			return NewTemporaryError(fmt.Errorf("failed to fetch receipts of L1 block %s (parent: %s) for L1 sysCfg update: %w", nextL1Origin, origin, err))
+		}
+		if err := UpdateSystemConfigWithL1Receipts(&l1t.sysCfg, receipts, l1t.cfg, nextL1Origin.Time); err != nil {
+			// the sysCfg changes should always be formatted correctly.
+			return NewCriticalError(fmt.Errorf("failed to update L1 sysCfg with receipts from block %s: %w", nextL1Origin, err))
+		}
 	}
 
 	l1t.block = nextL1Origin
