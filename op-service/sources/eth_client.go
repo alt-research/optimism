@@ -156,9 +156,6 @@ func NewEthClient(client client.RPC, log log.Logger, metrics caching.Metrics, co
 
 	client = LimitRPC(client, config.MaxConcurrentRequests)
 	recProvider := newRecProviderFromConfig(client, log, metrics, config)
-	if recProvider.isInnerNil() {
-		return nil, fmt.Errorf("failed to open RethDB")
-	}
 
 	preFetchNum := 20
 	{
