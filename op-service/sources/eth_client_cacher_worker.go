@@ -57,7 +57,7 @@ func startWarmer(logger log.Logger, client *EthClient, workCount int) {
 				if blockNum%100 == 0 {
 					logger.Info("got work", "blockNum", blockNum, "worker", id)
 				}
-				client.headerCall(context.TODO(), "eth_getBlockByNumber", numberID(blockNum))
+				client.blockCall(context.TODO(), "eth_getBlockByNumber", numberID(blockNum))
 			}
 		})(i)
 	}
