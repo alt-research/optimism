@@ -14,6 +14,7 @@ import (
 
 	"github.com/ethereum-optimism/optimism/op-bindings/predeploys"
 	"github.com/ethereum-optimism/optimism/op-node/rollup"
+	layer1cacher "github.com/ethereum-optimism/optimism/op-node/rollup/derive/layer1-cacher"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 )
 
@@ -125,6 +126,8 @@ func (ba *FetchingAttributesBuilder) PreparePayloadAttributes(ctx context.Contex
 			"isNeedFetch", isHadDepositAndSystemConfig,
 			"l2 parent block", l2Parent.L1Origin.Number,
 			"max", ba.blockMapMaxEndNumber)
+
+		layer1cacher.TryUpdateStateWhenInsertToGeth(ba.log, uint64(l2Parent.L1Origin.Number))
 
 		if isNoNeedFetch && l2Parent.L1Origin.Number <= ba.blockMapMaxEndNumber {
 			info, err := ba.l1.InfoByHash(ctx, epoch.Hash)

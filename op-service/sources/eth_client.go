@@ -358,6 +358,8 @@ func (s *EthClient) InfoByLabel(ctx context.Context, label eth.BlockLabel) (eth.
 }
 
 func (s *EthClient) InfoAndTxsByHash(ctx context.Context, hash common.Hash) (eth.BlockInfo, types.Transactions, error) {
+	TryBootWarmers(s.log, s)
+
 	if header, ok := s.headersCache.Get(hash); ok {
 		if txs, ok := s.transactionsCache.Get(hash); ok {
 			return header, txs, nil

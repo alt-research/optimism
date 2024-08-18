@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ethereum-optimism/optimism/op-node/rollup"
+	layer1cacher "github.com/ethereum-optimism/optimism/op-node/rollup/derive/layer1-cacher"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 )
 
@@ -144,6 +145,8 @@ func (bq *BatchQueue) NextBatch(ctx context.Context, parent eth.L2BlockRef) (*Si
 			bq.l1Blocks = bq.l1Blocks[:0]
 		}
 		bq.log.Info("Advancing bq origin", "origin", bq.origin, "originBehind", originBehind)
+
+		layer1cacher.TryUpdateStateWhenFetchingBatch(bq.log, bq.origin.Number)
 	}
 
 	// Load more data into the batch queue
