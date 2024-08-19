@@ -398,7 +398,15 @@ func (s *EthClient) InfoAndTxsByNumber(ctx context.Context, number uint64) (eth.
 	{
 		for i := uint64(0); i < n; i++ {
 			go (func(num uint64) {
-				s.blockCall(ctx, "eth_getBlockByNumber", numberID(number+num))
+				blockNumber := number + num
+
+				if _, ok := s.headersCacheByNumber.Get(blockNumber); ok {
+					if _, ok := s.transactionsCacheByNumber.Get(blockNumber); ok {
+						return
+					}
+				}
+
+				s.blockCall(ctx, "eth_getBlockByNumber", numberID(blockNumber))
 			})(i)
 		}
 	}

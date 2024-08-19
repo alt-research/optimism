@@ -36,6 +36,7 @@ func startWarmer(logger log.Logger, client *EthClient, workCount int) {
 	log.Info("Start warmer", "count", workCount)
 	for i := 0; i < workCount; i++ {
 		go (func(id int) {
+			lastestCount := uint64(0)
 			for {
 				if !layer1cacher.IsHasWarmWork() {
 					logger.Info("no works just sleep 1 second", "id", id)
@@ -47,6 +48,12 @@ func startWarmer(logger log.Logger, client *EthClient, workCount int) {
 				if blockNum == 0 {
 					continue
 				}
+
+				if lastestCount != 0 && lastestCount > blockNum {
+					logger.Debug("reset the warm work", "from", blockNum, "to", lastestCount)
+				}
+
+				lastestCount = blockNum
 
 				if _, ok := client.headersCacheByNumber.Get(blockNum); ok {
 					if _, ok := client.transactionsCacheByNumber.Get(blockNum); ok {
