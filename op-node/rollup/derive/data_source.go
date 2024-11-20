@@ -3,6 +3,7 @@ package derive
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -79,6 +80,9 @@ func (ds *DataSourceFactory) OpenData(ctx context.Context, ref eth.L1BlockRef, b
 	if ds.dsCfg.altDAEnabled {
 		// altDA([calldata | blobdata](l1Ref)) -> data
 		return NewAltDADataSource(ds.log, src, ds.fetcher, ds.altDAFetcher, ref), nil
+	}
+	if os.Getenv("DA_NAME") != "" {
+		return NewDaDataSource(ds.log, src, ref.ID()), nil
 	}
 	return src, nil
 }

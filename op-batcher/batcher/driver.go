@@ -7,10 +7,12 @@ import (
 	"io"
 	"math/big"
 	_ "net/http/pprof"
+	"os"
 	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -24,6 +26,8 @@ import (
 	"github.com/ethereum-optimism/optimism/op-batcher/metrics"
 	"github.com/ethereum-optimism/optimism/op-node/rollup"
 	"github.com/ethereum-optimism/optimism/op-node/rollup/derive"
+	"github.com/ethereum-optimism/optimism/op-service/da"
+	"github.com/ethereum-optimism/optimism/op-service/da/pb/calldata"
 	"github.com/ethereum-optimism/optimism/op-service/dial"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 	"github.com/ethereum-optimism/optimism/op-service/txmgr"
@@ -760,6 +764,36 @@ func (l *BatchSubmitter) cancelBlockingTx(queue *txmgr.Queue[txRef], receiptsCh 
 	l.sendTx(txData{}, true, candidate, queue, receiptsCh)
 }
 
+func (l *BatchSubmitter) publishToDAAndL1(txdata txData, queue *txmgr.Queue[txRef], receiptsCh chan txmgr.TxReceipt[txRef], daGroup *errgroup.Group) {
+	if nf := len(txdata.frames); nf != 1 {
+		l.Log.Crit("Unexpected number of frames in calldata tx", "num_frames", nf)
+	}
+	if txdata.asBlob {
+		l.Log.Crit("Unexpected blob txdata with da enabled")
+	}
+	goroutineSpawned := daGroup.TryGo(func() error {
+		c, err := da.Put(l.shutdownCtx, l.Log, txdata.CallData())
+		if err != nil {
+			l.Log.Warn("failed to send data to DA, falling back to send raw tx data to l1", "err", err)
+			err = nil
+			c = &calldata.Calldata{
+				Value: &calldata.Calldata_Raw{
+					Raw: txdata.CallData(),
+				},
+			}
+		} else {
+			log.Info("successfully send data to DA, sending ref to l1 now")
+		}
+		data, _ := proto.Marshal(c)
+		candidate := l.calldataTxCandidate(data)
+		l.sendTx(txdata, false, candidate, queue, receiptsCh)
+		return nil
+	})
+	if !goroutineSpawned {
+		l.recordFailedDARequest(txdata.ID(), nil)
+	}
+}
+
 // publishToAltDAAndL1 posts the txdata to the DA Provider and then sends the commitment to L1.
 func (l *BatchSubmitter) publishToAltDAAndL1(txdata txData, queue *txmgr.Queue[txRef], receiptsCh chan txmgr.TxReceipt[txRef], daGroup *errgroup.Group) {
 	// sanity checks
@@ -808,6 +842,11 @@ func (l *BatchSubmitter) sendTransaction(txdata txData, queue *txmgr.Queue[txRef
 	if l.Config.UseAltDA {
 		l.publishToAltDAAndL1(txdata, queue, receiptsCh, daGroup)
 		// we return nil to allow publishStateToL1 to keep processing the next txdata
+		return nil
+	}
+
+	if os.Getenv("DA_NAME") != "" {
+		l.publishToDAAndL1(txdata, queue, receiptsCh, daGroup)
 		return nil
 	}
 
