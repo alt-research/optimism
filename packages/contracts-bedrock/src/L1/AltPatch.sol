@@ -2,6 +2,7 @@
 pragma solidity 0.8.15;
 
 import { L2OutputOracle } from "src/L1/L2OutputOracle.sol";
+import { SuperchainConfig } from "src/L1/SuperchainConfig.sol";
 
 /// @custom:proxied
 /// @title AltL2OutputOracle
@@ -21,5 +22,18 @@ contract AltL2OutputOracle is L2OutputOracle {
         challenger = _challenger;
 
         emit AccountsUpdate(proposer, challenger);
+    }
+}
+
+/// @custom:proxied
+/// @title AltSuperchainConfig
+/// @notice This contract is inherited from `SuperchainConfig` to provide a patch to update guardian.
+contract AltSuperchainConfig is SuperchainConfig {
+
+    /// @notice Accepts new guardian address to replace current guardian.
+    ///         This function may only be called by the current Guardian.
+    function updateGuardian(address _guardian) public {
+        require(msg.sender == guardian(), "SuperchainConfig: only current guardian can update");
+        _setGuardian(_guardian);
     }
 }
