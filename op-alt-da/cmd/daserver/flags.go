@@ -19,6 +19,7 @@ const (
 	S3AccessKeySecretFlagName = "s3.access-key-secret"
 	FileStorePathFlagName     = "file.path"
 	GenericCommFlagName       = "generic-commitment"
+	XterioCommFlagName        = "xterio-commitment"
 )
 
 const EnvVarPrefix = "OP_ALTDA_SERVER"
@@ -49,6 +50,12 @@ var (
 		Name:    GenericCommFlagName,
 		Usage:   "enable generic commitments for testing. Not for production use.",
 		EnvVars: prefixEnvVars("GENERIC_COMMITMENT"),
+		Value:   false,
+	}
+	XterioCommFlag = &cli.BoolFlag{
+		Name:    XterioCommFlagName,
+		Usage:   "enable xterio commitments.",
+		EnvVars: prefixEnvVars("XTERIO_COMMITMENT"),
 		Value:   false,
 	}
 	S3BucketFlag = &cli.StringFlag{
@@ -88,6 +95,7 @@ var optionalFlags = []cli.Flag{
 	S3AccessKeyIDFlag,
 	S3AccessKeySecretFlag,
 	GenericCommFlag,
+	XterioCommFlag,
 }
 
 func init() {
@@ -105,6 +113,7 @@ type CLIConfig struct {
 	S3AccessKeyID     string
 	S3AccessKeySecret string
 	UseGenericComm    bool
+	UseXterioComm     bool
 }
 
 func ReadCLIConfig(ctx *cli.Context) CLIConfig {
@@ -115,6 +124,7 @@ func ReadCLIConfig(ctx *cli.Context) CLIConfig {
 		S3AccessKeyID:     ctx.String(S3AccessKeyIDFlagName),
 		S3AccessKeySecret: ctx.String(S3AccessKeySecretFlagName),
 		UseGenericComm:    ctx.Bool(GenericCommFlagName),
+		UseXterioComm:     ctx.Bool(XterioCommFlagName),
 	}
 }
 
