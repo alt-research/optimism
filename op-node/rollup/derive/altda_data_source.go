@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	altda "github.com/ethereum-optimism/optimism/op-alt-da"
-	"github.com/ethereum-optimism/optimism/op-alt-da/pb/calldata"
+	"github.com/ethereum-optimism/optimism/op-alt-da/pb/xterio"
 	"github.com/ethereum-optimism/optimism/op-node/rollup/derive/params"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 	"github.com/ethereum/go-ethereum/log"
@@ -57,7 +57,7 @@ func (s *AltDADataSource) Next(ctx context.Context) (eth.Data, error) {
 		if len(data) == 0 {
 			return nil, NotEnoughData
 		}
-		if err := proto.Unmarshal(data, &calldata.Calldata{}); err == nil {
+		if err := proto.Unmarshal(data, &xterio.XterioCommitment{}); err == nil {
 			s.comm = altda.XterioCommitment(data)
 		} else {
 			// If the tx data type is not altDA, we forward it downstream to let the next
