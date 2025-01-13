@@ -192,9 +192,9 @@ func (d *DA) Reset(ctx context.Context, base eth.L1BlockRef, baseCfg eth.SystemC
 // the challenge status in the DataAvailabilityChallenge L1 contract.
 func (d *DA) GetInput(ctx context.Context, l1 L1Fetcher, comm CommitmentData, blockId eth.L1BlockRef) (eth.Data, error) {
 	// If it's not the right commitment type, report it as an expired commitment in order to skip it
-	if d.cfg.CommitmentType != comm.CommitmentType() {
-		return nil, fmt.Errorf("invalid commitment type; expected: %v, got: %v: %w", d.cfg.CommitmentType, comm.CommitmentType(), ErrExpiredChallenge)
-	}
+	// if d.cfg.CommitmentType != comm.CommitmentType() {
+	// 	return nil, fmt.Errorf("invalid commitment type; expected: %v, got: %v: %w", d.cfg.CommitmentType, comm.CommitmentType(), ErrExpiredChallenge)
+	// }
 	status := d.state.GetChallengeStatus(comm, blockId.Number)
 	// check if the challenge is expired
 	if status == ChallengeExpired {

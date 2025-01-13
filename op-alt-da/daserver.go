@@ -34,9 +34,10 @@ type DAServer struct {
 	httpServer     *http.Server
 	listener       net.Listener
 	useGenericComm bool
+	useXterioComm  bool
 }
 
-func NewDAServer(host string, port int, store KVStore, log log.Logger, useGenericComm bool) *DAServer {
+func NewDAServer(host string, port int, store KVStore, log log.Logger, useGenericComm, useXterioComm bool) *DAServer {
 	endpoint := net.JoinHostPort(host, strconv.Itoa(port))
 	return &DAServer{
 		log:      log,
@@ -46,6 +47,7 @@ func NewDAServer(host string, port int, store KVStore, log log.Logger, useGeneri
 			Addr: endpoint,
 		},
 		useGenericComm: useGenericComm,
+		useXterioComm:  useXterioComm,
 	}
 }
 
@@ -143,19 +145,25 @@ func (d *DAServer) HandlePut(w http.ResponseWriter, r *http.Request) {
 
 	if r.URL.Path == "/put" || r.URL.Path == "/put/" { // without commitment
 		var comm []byte
-		if d.useGenericComm {
-			n, err := rand.Int(rand.Reader, big.NewInt(99999999999999))
-			if err != nil {
-				d.log.Error("Failed to generate commitment", "err", err)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			comm = append(comm, 0x01)
-			comm = append(comm, 0xff)
-			comm = append(comm, n.Bytes()...)
-
+		var srcComm XterioCommitment
+		if d.useXterioComm {
+			srcComm = NewXterioCommitmentData(input)
+			comm = srcComm.Encode()
 		} else {
-			comm = NewKeccak256Commitment(input).Encode()
+			if d.useGenericComm {
+				n, err := rand.Int(rand.Reader, big.NewInt(99999999999999))
+				if err != nil {
+					d.log.Error("Failed to generate commitment", "err", err)
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				comm = append(comm, 0x01)
+				comm = append(comm, 0xff)
+				comm = append(comm, n.Bytes()...)
+
+			} else {
+				comm = NewKeccak256Commitment(input).Encode()
+			}
 		}
 
 		if err = d.store.Put(r.Context(), comm, input); err != nil {
@@ -164,6 +172,12 @@ func (d *DAServer) HandlePut(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		d.log.Info("stored commitment", "key", hex.EncodeToString(comm), "input_len", len(input))
+
+		if d.useXterioComm {
+			// response comm for xterio type should use `srcComm` rather than `comm`
+			comm = srcComm
+			d.log.Info("response comm for xterio commitment", "key", hex.EncodeToString(comm), "input_len", len(input))
+		}
 
 		if _, err := w.Write(comm); err != nil {
 			d.log.Error("Failed to write commitment request body", "err", err, "comm", comm)
