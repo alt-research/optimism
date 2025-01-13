@@ -6,9 +6,11 @@ import (
 	"fmt"
 
 	altda "github.com/ethereum-optimism/optimism/op-alt-da"
+	"github.com/ethereum-optimism/optimism/op-alt-da/pb/xterio"
 	"github.com/ethereum-optimism/optimism/op-node/rollup/derive/params"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 	"github.com/ethereum/go-ethereum/log"
+	"google.golang.org/protobuf/proto"
 )
 
 // AltDADataSource is a data source that fetches inputs from a AltDA provider given
@@ -55,20 +57,24 @@ func (s *AltDADataSource) Next(ctx context.Context) (eth.Data, error) {
 		if len(data) == 0 {
 			return nil, NotEnoughData
 		}
-		// If the tx data type is not altDA, we forward it downstream to let the next
-		// steps validate and potentially parse it as L1 DA inputs.
-		if data[0] != params.DerivationVersion1 {
-			return data, nil
-		}
+		if err := proto.Unmarshal(data, &xterio.XterioCommitment{}); err == nil {
+			s.comm = altda.XterioCommitment(data)
+		} else {
+			// If the tx data type is not altDA, we forward it downstream to let the next
+			// steps validate and potentially parse it as L1 DA inputs.
+			if data[0] != params.DerivationVersion1 {
+				return data, nil
+			}
 
-		// validate batcher inbox data is a commitment.
-		// strip the transaction data version byte from the data before decoding.
-		comm, err := altda.DecodeCommitmentData(data[1:])
-		if err != nil {
-			s.log.Warn("invalid commitment", "commitment", data, "err", err)
-			return nil, NotEnoughData
+			// validate batcher inbox data is a commitment.
+			// strip the transaction data version byte from the data before decoding.
+			comm, err := altda.DecodeCommitmentData(data[1:])
+			if err != nil {
+				s.log.Warn("invalid commitment", "commitment", data, "err", err)
+				return nil, NotEnoughData
+			}
+			s.comm = comm
 		}
-		s.comm = comm
 	}
 	// use the commitment to fetch the input from the AltDA provider.
 	data, err := s.fetcher.GetInput(ctx, s.l1, s.comm, s.id)
