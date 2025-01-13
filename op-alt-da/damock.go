@@ -116,7 +116,7 @@ type FakeDAServer struct {
 func NewFakeDAServer(host string, port int, log log.Logger) *FakeDAServer {
 	store := NewMemStore()
 	fakeDAServer := &FakeDAServer{
-		DAServer:          NewDAServer(host, port, store, log, true),
+		DAServer:          NewDAServer(host, port, store, log, true, false),
 		putRequestLatency: 0,
 		getRequestLatency: 0,
 	}

@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+option go_package = "pb/xterio";
+
+package xterio;
+
+// XterioCommitment wraps the raw data or the keccak256 hash of the raw data.
+message XterioCommitment {
+  oneof value {
+    bytes raw = 1;
+    Digest Digest = 3; // IMPORTANT: this index cannot be changed
+  }
+}
+
+message Digest { bytes payload = 1; }

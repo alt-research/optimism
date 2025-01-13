@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ethereum-optimism/optimism/op-alt-da/pb/xterio"
 	"github.com/ethereum-optimism/optimism/op-node/rollup/derive/params"
 	"github.com/ethereum/go-ethereum/crypto"
+	"google.golang.org/protobuf/proto"
 )
 
 // ErrInvalidCommitment is returned when the commitment cannot be parsed into a known commitment type.
@@ -36,8 +38,10 @@ func CommitmentTypeFromString(s string) (CommitmentType, error) {
 const (
 	Keccak256CommitmentType CommitmentType = 0
 	GenericCommitmentType   CommitmentType = 1
+	XterioCommitmentType    CommitmentType = 2
 	KeccakCommitmentString  string         = "KeccakCommitment"
 	GenericCommitmentString string         = "GenericCommitment"
+	XterioCommitmentString  string         = "XterioCommitment"
 )
 
 // CommitmentData is the binary representation of a commitment.
@@ -55,6 +59,22 @@ type Keccak256Commitment []byte
 // GenericCommitment is an implementation of CommitmentData that treats the commitment as an opaque bytestring.
 type GenericCommitment []byte
 
+// XterioCommitment is an implementation of CommitmentData that treats the commitment as an opaque bytestring.
+type XterioCommitment []byte
+
+func NewXterioCommitmentData(input []byte) XterioCommitment {
+	h := crypto.Keccak256(input)
+	x := &xterio.XterioCommitment{
+		Value: &xterio.XterioCommitment_Digest{
+			Digest: &xterio.Digest{
+				Payload: h,
+			},
+		},
+	}
+	b, _ := proto.Marshal(x)
+	return XterioCommitment(b)
+}
+
 // NewCommitmentData creates a new commitment from the given input and desired type.
 func NewCommitmentData(t CommitmentType, input []byte) CommitmentData {
 	switch t {
@@ -62,6 +82,8 @@ func NewCommitmentData(t CommitmentType, input []byte) CommitmentData {
 		return NewKeccak256Commitment(input)
 	case GenericCommitmentType:
 		return NewGenericCommitment(input)
+	case XterioCommitmentType:
+		return NewXterioCommitmentData(input)
 	default:
 		return nil
 	}
@@ -74,15 +96,20 @@ func DecodeCommitmentData(input []byte) (CommitmentData, error) {
 	if len(input) == 0 {
 		return nil, ErrInvalidCommitment
 	}
-	t := CommitmentType(input[0])
-	data := input[1:]
-	switch t {
-	case Keccak256CommitmentType:
-		return DecodeKeccak256(data)
-	case GenericCommitmentType:
-		return DecodeGenericCommitment(data)
-	default:
-		return nil, ErrInvalidCommitment
+	x := &xterio.XterioCommitment{}
+	if err := proto.Unmarshal(input, x); err == nil {
+		return XterioCommitment(input), nil
+	} else {
+		t := CommitmentType(input[0])
+		data := input[1:]
+		switch t {
+		case Keccak256CommitmentType:
+			return DecodeKeccak256(data)
+		case GenericCommitmentType:
+			return DecodeGenericCommitment(data)
+		default:
+			return nil, ErrInvalidCommitment
+		}
 	}
 }
 
@@ -166,4 +193,29 @@ func (c GenericCommitment) Verify(input []byte) error {
 
 func (c GenericCommitment) String() string {
 	return hex.EncodeToString(c.Encode())
+}
+
+func (x XterioCommitment) CommitmentType() CommitmentType {
+	return XterioCommitmentType
+}
+
+func (x XterioCommitment) Encode() []byte {
+	p := &xterio.XterioCommitment{}
+	_ = proto.Unmarshal(x, p)
+	return p.GetDigest().GetPayload()
+}
+
+func (x XterioCommitment) TxData() []byte {
+	return x
+}
+
+func (x XterioCommitment) Verify(input []byte) error {
+	if !bytes.Equal(crypto.Keccak256(input), x.Encode()) {
+		return ErrCommitmentMismatch
+	}
+	return nil
+}
+
+func (x XterioCommitment) String() string {
+	return hex.EncodeToString(x)
 }
