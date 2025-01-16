@@ -2,6 +2,7 @@ name: Build OP Stack
 on:
   push:
     tags: ["*"]
+  workflow_dispatch:
 
 jobs:
   docker-op-stack-go:
