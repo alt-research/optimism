@@ -7,14 +7,14 @@ on:
 jobs:
   docker-op-stack-go:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - name: build and push op-stack-go
-            image: op-stack-go
-            dockerfile: ops/docker/op-stack-go/Dockerfile
-            context: .
-            buildargs: '--build-arg BUILDPLATFORM=linux/amd64 --build-arg TARGETOS=linux --build-arg TARGETARCH=amd64'
+    # strategy:
+    #   matrix:
+    #     include:
+    #       - name: build and push op-stack-go
+    #         image: op-stack-go
+    #         dockerfile: ops/docker/op-stack-go/Dockerfile
+    #         context: .
+    #         buildargs: '--build-arg BUILDPLATFORM=linux/amd64 --build-arg TARGETOS=linux --build-arg TARGETARCH=amd64'
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -115,44 +115,46 @@ jobs:
             ${{ secrets.ECR_REGISTRY }}/optimism-node:latest
             ${{ secrets.ECR_REGISTRY }}/optimism-node:${{ env.SHORT_SHA }}
             ${{ secrets.ECR_REGISTRY }}/optimism-node:${{ env.REF_NAME }}
-          file: op-node/Dockerfile
+          file: docker-bake.hcl
           provenance: false
-          build-args: |
-            BUILDPLATFORM=linux/amd64
-            TARGETOS=linux
-            TARGETARCH=amd64
-            OP_STACK_GO_BUILDER=${{ secrets.ECR_REGISTRY }}/op-stack-go:latest
+          set: |
+            *.platform=linux/amd64,linux/arm64
+            *.args.GIT_COMMIT=${{ github.sha }}
+            *.args.GIT_DATE=$(git log -1 --format=%cd)
+            *.tags=${{ secrets.ECR_REGISTRY }}/optimism-node:latest
+            *.tags=${{ secrets.ECR_REGISTRY }}/optimism-node:${{ env.SHORT_SHA }}
+            *.tags=${{ secrets.ECR_REGISTRY }}/optimism-node:${{ env.REF_NAME }}
 
-      - name: build and push op-proposer
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ secrets.ECR_REGISTRY }}/optimism-proposer:latest
-            ${{ secrets.ECR_REGISTRY }}/optimism-proposer:${{ env.SHORT_SHA }}
-            ${{ secrets.ECR_REGISTRY }}/optimism-proposer:${{ env.REF_NAME }}
-          file: op-proposer/Dockerfile
-          provenance: false
-          build-args: |
-            BUILDPLATFORM=linux/amd64
-            TARGETOS=linux
-            TARGETARCH=amd64
-            OP_STACK_GO_BUILDER=${{ secrets.ECR_REGISTRY }}/op-stack-go:latest
+      # - name: build and push op-proposer
+      #   uses: docker/build-push-action@v4
+      #   with:
+      #     context: .
+      #     push: true
+      #     tags: |
+      #       ${{ secrets.ECR_REGISTRY }}/optimism-proposer:latest
+      #       ${{ secrets.ECR_REGISTRY }}/optimism-proposer:${{ env.SHORT_SHA }}
+      #       ${{ secrets.ECR_REGISTRY }}/optimism-proposer:${{ env.REF_NAME }}
+      #     file: op-proposer/Dockerfile
+      #     provenance: false
+      #     build-args: |
+      #       BUILDPLATFORM=linux/amd64
+      #       TARGETOS=linux
+      #       TARGETARCH=amd64
+      #       OP_STACK_GO_BUILDER=${{ secrets.ECR_REGISTRY }}/op-stack-go:latest
 
-      - name: build and push op-batcher
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ secrets.ECR_REGISTRY }}/optimism-batcher:latest
-            ${{ secrets.ECR_REGISTRY }}/optimism-batcher:${{ env.SHORT_SHA }}
-            ${{ secrets.ECR_REGISTRY }}/optimism-batcher:${{ env.REF_NAME }}
-          file: op-batcher/Dockerfile
-          provenance: false
-          build-args: |
-            BUILDPLATFORM=linux/amd64
-            TARGETOS=linux
-            TARGETARCH=amd64
-            OP_STACK_GO_BUILDER=${{ secrets.ECR_REGISTRY }}/op-stack-go:latest
+      # - name: build and push op-batcher
+      #   uses: docker/build-push-action@v4
+      #   with:
+      #     context: .
+      #     push: true
+      #     tags: |
+      #       ${{ secrets.ECR_REGISTRY }}/optimism-batcher:latest
+      #       ${{ secrets.ECR_REGISTRY }}/optimism-batcher:${{ env.SHORT_SHA }}
+      #       ${{ secrets.ECR_REGISTRY }}/optimism-batcher:${{ env.REF_NAME }}
+      #     file: op-batcher/Dockerfile
+      #     provenance: false
+      #     build-args: |
+      #       BUILDPLATFORM=linux/amd64
+      #       TARGETOS=linux
+      #       TARGETARCH=amd64
+      #       OP_STACK_GO_BUILDER=${{ secrets.ECR_REGISTRY }}/op-stack-go:latest
