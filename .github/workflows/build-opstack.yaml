@@ -45,18 +45,6 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
 
-      - name: ${{ matrix.name }}
-        uses: docker/build-push-action@v4
-        with:
-          context: ${{ matrix.context }}
-          push: true
-          tags: |
-            ${{ secrets.ECR_REGISTRY }}/${{ matrix.image }}:latest
-            ${{ secrets.ECR_REGISTRY }}/${{ matrix.image }}:${{ env.SHORT_SHA }}
-            ${{ secrets.ECR_REGISTRY }}/${{ matrix.image }}:${{ env.REF_NAME }}
-          file: ${{ matrix.dockerfile }}
-          provenance: false
-
   docker:
     runs-on: ubuntu-latest
     needs: docker-op-stack-go
@@ -119,7 +107,7 @@ jobs:
             op-node.args.GIT_DATE=$(git log -1 --format=%cd)
             op-node.args.REGISTRY=${{ secrets.ECR_REGISTRY }}
             op-node.args.REPOSITORY=optimism-node
-            op-node.args.KONA_VERSION=${{ env.SHORT_SHA }}
+            op-node.args.KONA_VERSION=${{ env.REF_NAME }}
       # - name: build and push op-proposer
       #   uses: docker/build-push-action@v4
       #   with:
