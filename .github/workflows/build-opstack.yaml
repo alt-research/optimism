@@ -117,10 +117,9 @@ jobs:
             op-node.platform=linux/amd64,linux/arm64
             op-node.args.GIT_COMMIT=${{ github.sha }}
             op-node.args.GIT_DATE=$(git log -1 --format=%cd)
-            op-node.tags=${{ secrets.ECR_REGISTRY }}/optimism-node:latest
-            op-node.tags=${{ secrets.ECR_REGISTRY }}/optimism-node:${{ env.SHORT_SHA }}
-            op-node.tags=${{ secrets.ECR_REGISTRY }}/optimism-node:${{ env.REF_NAME }}
-
+            op-node.args.REGISTRY=${{ secrets.ECR_REGISTRY }}
+            op-node.args.REPOSITORY=optimism-node
+            op-node.args.KONA_VERSION=${{ env.SHORT_SHA }}
       # - name: build and push op-proposer
       #   uses: docker/build-push-action@v4
       #   with:
