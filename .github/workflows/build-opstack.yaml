@@ -108,6 +108,9 @@ jobs:
             op-node.args.REGISTRY=${{ secrets.ECR_REGISTRY }}
             op-node.args.REPOSITORY=optimism-node
             op-node.args.KONA_VERSION=${{ env.REF_NAME }}
+            op-node.tags=${{ secrets.ECR_REGISTRY }}/optimism-node:latest
+            op-node.tags=${{ secrets.ECR_REGISTRY }}/optimism-node:${{ github.sha }}
+            op-node.tags=${{ secrets.ECR_REGISTRY }}/optimism-node:${{ env.REF_NAME }}
       # - name: build and push op-proposer
       #   uses: docker/build-push-action@v4
       #   with:
