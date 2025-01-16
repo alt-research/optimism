@@ -77,20 +77,20 @@ ARG OP_PROGRAM_VERSION=v0.0.0
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build cd op-program && make op-program-host  \
   GOOS=$TARGETOS GOARCH=$TARGETARCH GITCOMMIT=$GIT_COMMIT GITDATE=$GIT_DATE VERSION="$OP_PROGRAM_VERSION"
 
-FROM --platform=$BUILDPLATFORM builder AS op-wheel-builder
-ARG OP_WHEEL_VERSION=v0.0.0
-RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build cd op-wheel && make op-wheel  \
-  GOOS=$TARGETOS GOARCH=$TARGETARCH GITCOMMIT=$GIT_COMMIT GITDATE=$GIT_DATE  VERSION="$OP_WHEEL_VERSION"
+# FROM --platform=$BUILDPLATFORM builder AS op-wheel-builder
+# ARG OP_WHEEL_VERSION=v0.0.0
+# RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build cd op-wheel && make op-wheel  \
+#   GOOS=$TARGETOS GOARCH=$TARGETARCH GITCOMMIT=$GIT_COMMIT GITDATE=$GIT_DATE  VERSION="$OP_WHEEL_VERSION"
 
 FROM --platform=$BUILDPLATFORM builder AS op-node-builder
 ARG OP_NODE_VERSION=v0.0.0
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build cd op-node && make op-node  \
   GOOS=$TARGETOS GOARCH=$TARGETARCH GITCOMMIT=$GIT_COMMIT GITDATE=$GIT_DATE VERSION="$OP_NODE_VERSION"
 
-FROM --platform=$BUILDPLATFORM builder AS op-challenger-builder
-ARG OP_CHALLENGER_VERSION=v0.0.0
-RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build cd op-challenger && make op-challenger  \
-  GOOS=$TARGETOS GOARCH=$TARGETARCH GITCOMMIT=$GIT_COMMIT GITDATE=$GIT_DATE  VERSION="$OP_CHALLENGER_VERSION"
+# FROM --platform=$BUILDPLATFORM builder AS op-challenger-builder
+# ARG OP_CHALLENGER_VERSION=v0.0.0
+# RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build cd op-challenger && make op-challenger  \
+#   GOOS=$TARGETOS GOARCH=$TARGETARCH GITCOMMIT=$GIT_COMMIT GITDATE=$GIT_DATE  VERSION="$OP_CHALLENGER_VERSION"
 
 FROM --platform=$BUILDPLATFORM builder AS op-dispute-mon-builder
 ARG OP_DISPUTE_MON_VERSION=v0.0.0
@@ -107,14 +107,14 @@ ARG OP_PROPOSER_VERSION=v0.0.0
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build cd op-proposer && make op-proposer  \
   GOOS=$TARGETOS GOARCH=$TARGETARCH GITCOMMIT=$GIT_COMMIT GITDATE=$GIT_DATE  VERSION="$OP_PROPOSER_VERSION"
 
-FROM --platform=$BUILDPLATFORM builder AS op-conductor-builder
-ARG OP_CONDUCTOR_VERSION=v0.0.0
-RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build cd op-conductor && make op-conductor  \
-  GOOS=$TARGETOS GOARCH=$TARGETARCH GITCOMMIT=$GIT_COMMIT GITDATE=$GIT_DATE  VERSION="$OP_CONDUCTOR_VERSION"
+# FROM --platform=$BUILDPLATFORM builder AS op-conductor-builder
+# ARG OP_CONDUCTOR_VERSION=v0.0.0
+# RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build cd op-conductor && make op-conductor  \
+#   GOOS=$TARGETOS GOARCH=$TARGETARCH GITCOMMIT=$GIT_COMMIT GITDATE=$GIT_DATE  VERSION="$OP_CONDUCTOR_VERSION"
 
-FROM --platform=$BUILDPLATFORM builder AS da-server-builder
-RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build cd op-alt-da && make da-server  \
-  GOOS=$TARGETOS GOARCH=$TARGETARCH GITCOMMIT=$GIT_COMMIT GITDATE=$GIT_DATE
+# FROM --platform=$BUILDPLATFORM builder AS da-server-builder
+# RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build cd op-alt-da && make da-server  \
+#   GOOS=$TARGETOS GOARCH=$TARGETARCH GITCOMMIT=$GIT_COMMIT GITDATE=$GIT_DATE
 
 # FROM --platform=$BUILDPLATFORM builder AS op-supervisor-builder
 # ARG OP_SUPERVISOR_VERSION=v0.0.0
@@ -174,13 +174,13 @@ FROM --platform=$TARGETPLATFORM $TARGET_BASE_IMAGE AS op-proposer-target
 COPY --from=op-proposer-builder /app/op-proposer/bin/op-proposer /usr/local/bin/
 CMD ["op-proposer"]
 
-FROM --platform=$TARGETPLATFORM $TARGET_BASE_IMAGE AS op-conductor-target
-COPY --from=op-conductor-builder /app/op-conductor/bin/op-conductor /usr/local/bin/
-CMD ["op-conductor"]
+# FROM --platform=$TARGETPLATFORM $TARGET_BASE_IMAGE AS op-conductor-target
+# COPY --from=op-conductor-builder /app/op-conductor/bin/op-conductor /usr/local/bin/
+# CMD ["op-conductor"]
 
-FROM --platform=$TARGETPLATFORM $TARGET_BASE_IMAGE AS da-server-target
-COPY --from=da-server-builder /app/op-alt-da/bin/da-server /usr/local/bin/
-CMD ["da-server"]
+# FROM --platform=$TARGETPLATFORM $TARGET_BASE_IMAGE AS da-server-target
+# COPY --from=da-server-builder /app/op-alt-da/bin/da-server /usr/local/bin/
+# CMD ["da-server"]
 
 # FROM --platform=$TARGETPLATFORM $TARGET_BASE_IMAGE AS op-supervisor-target
 # COPY --from=op-supervisor-builder /app/op-supervisor/bin/op-supervisor /usr/local/bin/
