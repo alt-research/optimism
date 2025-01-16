@@ -95,6 +95,7 @@ var optionalFlags = []cli.Flag{
 	S3AccessKeyIDFlag,
 	S3AccessKeySecretFlag,
 	GenericCommFlag,
+	XterioCommFlag,
 }
 
 func init() {
