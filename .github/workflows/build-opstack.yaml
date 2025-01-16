@@ -114,12 +114,12 @@ jobs:
           file: docker-bake.hcl
           provenance: false
           set: |
-            *.platform=linux/amd64,linux/arm64
-            *.args.GIT_COMMIT=${{ github.sha }}
-            *.args.GIT_DATE=$(git log -1 --format=%cd)
-            *.tags=${{ secrets.ECR_REGISTRY }}/optimism-node:latest
-            *.tags=${{ secrets.ECR_REGISTRY }}/optimism-node:${{ env.SHORT_SHA }}
-            *.tags=${{ secrets.ECR_REGISTRY }}/optimism-node:${{ env.REF_NAME }}
+            op-node.platform=linux/amd64,linux/arm64
+            op-node.args.GIT_COMMIT=${{ github.sha }}
+            op-node.args.GIT_DATE=$(git log -1 --format=%cd)
+            op-node.tags=${{ secrets.ECR_REGISTRY }}/optimism-node:latest
+            op-node.tags=${{ secrets.ECR_REGISTRY }}/optimism-node:${{ env.SHORT_SHA }}
+            op-node.tags=${{ secrets.ECR_REGISTRY }}/optimism-node:${{ env.REF_NAME }}
 
       # - name: build and push op-proposer
       #   uses: docker/build-push-action@v4
