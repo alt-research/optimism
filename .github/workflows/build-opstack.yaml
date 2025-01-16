@@ -111,10 +111,6 @@ jobs:
         with:
           context: .
           push: true
-          tags: |
-            ${{ secrets.ECR_REGISTRY }}/optimism-node:latest
-            ${{ secrets.ECR_REGISTRY }}/optimism-node:${{ env.SHORT_SHA }}
-            ${{ secrets.ECR_REGISTRY }}/optimism-node:${{ env.REF_NAME }}
           file: docker-bake.hcl
           provenance: false
           set: |
