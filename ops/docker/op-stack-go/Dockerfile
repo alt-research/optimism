@@ -92,20 +92,20 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
 # RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build cd op-challenger && make op-challenger  \
 #   GOOS=$TARGETOS GOARCH=$TARGETARCH GITCOMMIT=$GIT_COMMIT GITDATE=$GIT_DATE  VERSION="$OP_CHALLENGER_VERSION"
 
-FROM --platform=$BUILDPLATFORM builder AS op-dispute-mon-builder
-ARG OP_DISPUTE_MON_VERSION=v0.0.0
-RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build cd op-dispute-mon && make op-dispute-mon  \
-  GOOS=$TARGETOS GOARCH=$TARGETARCH GITCOMMIT=$GIT_COMMIT GITDATE=$GIT_DATE  VERSION="$OP_DISPUTE_MON_VERSION"
+# FROM --platform=$BUILDPLATFORM builder AS op-dispute-mon-builder
+# ARG OP_DISPUTE_MON_VERSION=v0.0.0
+# RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build cd op-dispute-mon && make op-dispute-mon  \
+#   GOOS=$TARGETOS GOARCH=$TARGETARCH GITCOMMIT=$GIT_COMMIT GITDATE=$GIT_DATE  VERSION="$OP_DISPUTE_MON_VERSION"
 
-FROM --platform=$BUILDPLATFORM builder AS op-batcher-builder
-ARG OP_BATCHER_VERSION=v0.0.0
-RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build cd op-batcher && make op-batcher  \
-  GOOS=$TARGETOS GOARCH=$TARGETARCH GITCOMMIT=$GIT_COMMIT GITDATE=$GIT_DATE  VERSION="$OP_BATCHER_VERSION"
+# FROM --platform=$BUILDPLATFORM builder AS op-batcher-builder
+# ARG OP_BATCHER_VERSION=v0.0.0
+# RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build cd op-batcher && make op-batcher  \
+#   GOOS=$TARGETOS GOARCH=$TARGETARCH GITCOMMIT=$GIT_COMMIT GITDATE=$GIT_DATE  VERSION="$OP_BATCHER_VERSION"
 
-FROM --platform=$BUILDPLATFORM builder AS op-proposer-builder
-ARG OP_PROPOSER_VERSION=v0.0.0
-RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build cd op-proposer && make op-proposer  \
-  GOOS=$TARGETOS GOARCH=$TARGETARCH GITCOMMIT=$GIT_COMMIT GITDATE=$GIT_DATE  VERSION="$OP_PROPOSER_VERSION"
+# FROM --platform=$BUILDPLATFORM builder AS op-proposer-builder
+# ARG OP_PROPOSER_VERSION=v0.0.0
+# RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build cd op-proposer && make op-proposer  \
+#   GOOS=$TARGETOS GOARCH=$TARGETARCH GITCOMMIT=$GIT_COMMIT GITDATE=$GIT_DATE  VERSION="$OP_PROPOSER_VERSION"
 
 # FROM --platform=$BUILDPLATFORM builder AS op-conductor-builder
 # ARG OP_CONDUCTOR_VERSION=v0.0.0
@@ -135,9 +135,9 @@ FROM --platform=$TARGETPLATFORM $TARGET_BASE_IMAGE AS op-program-target
 COPY --from=op-program-builder /app/op-program/bin/op-program /usr/local/bin/
 CMD ["op-program"]
 
-FROM --platform=$TARGETPLATFORM $TARGET_BASE_IMAGE AS op-wheel-target
-COPY --from=op-wheel-builder /app/op-wheel/bin/op-wheel /usr/local/bin/
-CMD ["op-wheel"]
+# FROM --platform=$TARGETPLATFORM $TARGET_BASE_IMAGE AS op-wheel-target
+# COPY --from=op-wheel-builder /app/op-wheel/bin/op-wheel /usr/local/bin/
+# CMD ["op-wheel"]
 
 FROM --platform=$TARGETPLATFORM $TARGET_BASE_IMAGE AS op-node-target
 COPY --from=op-node-builder /app/op-node/bin/op-node /usr/local/bin/
@@ -147,32 +147,32 @@ CMD ["op-node"]
 FROM --platform=$TARGETPLATFORM ghcr.io/anton-rs/kona/kona-fpp-asterisc:$KONA_VERSION AS kona
 
 # Also produce an op-challenger loaded with kona and asterisc using ubuntu
-FROM --platform=$TARGETPLATFORM $UBUNTU_TARGET_BASE_IMAGE AS op-challenger-target
-RUN apt-get update && apt-get install -y --no-install-recommends musl openssl ca-certificates
-COPY --from=op-challenger-builder /app/op-challenger/bin/op-challenger /usr/local/bin/
-# Copy in op-program and cannon
-COPY --from=op-program-builder /app/op-program/bin/op-program /usr/local/bin/
-ENV OP_CHALLENGER_CANNON_SERVER /usr/local/bin/op-program
-COPY --from=cannon-builder /app/cannon/bin/cannon /usr/local/bin/
-ENV OP_CHALLENGER_CANNON_BIN /usr/local/bin/cannon
-# Copy in kona and asterisc
-COPY --from=kona /kona-host /usr/local/bin/
-ENV OP_CHALLENGER_ASTERISC_KONA_SERVER=/usr/local/bin/kona-host
-COPY --from=kona /asterisc /usr/local/bin/
-ENV OP_CHALLENGER_ASTERISC_BIN=/usr/local/bin/asterisc
-CMD ["op-challenger"]
+# FROM --platform=$TARGETPLATFORM $UBUNTU_TARGET_BASE_IMAGE AS op-challenger-target
+# RUN apt-get update && apt-get install -y --no-install-recommends musl openssl ca-certificates
+# COPY --from=op-challenger-builder /app/op-challenger/bin/op-challenger /usr/local/bin/
+# # Copy in op-program and cannon
+# COPY --from=op-program-builder /app/op-program/bin/op-program /usr/local/bin/
+# ENV OP_CHALLENGER_CANNON_SERVER /usr/local/bin/op-program
+# COPY --from=cannon-builder /app/cannon/bin/cannon /usr/local/bin/
+# ENV OP_CHALLENGER_CANNON_BIN /usr/local/bin/cannon
+# # Copy in kona and asterisc
+# COPY --from=kona /kona-host /usr/local/bin/
+# ENV OP_CHALLENGER_ASTERISC_KONA_SERVER=/usr/local/bin/kona-host
+# COPY --from=kona /asterisc /usr/local/bin/
+# ENV OP_CHALLENGER_ASTERISC_BIN=/usr/local/bin/asterisc
+# CMD ["op-challenger"]
 
-FROM --platform=$TARGETPLATFORM $TARGET_BASE_IMAGE AS op-dispute-mon-target
-COPY --from=op-dispute-mon-builder /app/op-dispute-mon/bin/op-dispute-mon /usr/local/bin/
-CMD ["op-dispute-mon"]
+# FROM --platform=$TARGETPLATFORM $TARGET_BASE_IMAGE AS op-dispute-mon-target
+# COPY --from=op-dispute-mon-builder /app/op-dispute-mon/bin/op-dispute-mon /usr/local/bin/
+# CMD ["op-dispute-mon"]
 
-FROM --platform=$TARGETPLATFORM $TARGET_BASE_IMAGE AS op-batcher-target
-COPY --from=op-batcher-builder /app/op-batcher/bin/op-batcher /usr/local/bin/
-CMD ["op-batcher"]
+# FROM --platform=$TARGETPLATFORM $TARGET_BASE_IMAGE AS op-batcher-target
+# COPY --from=op-batcher-builder /app/op-batcher/bin/op-batcher /usr/local/bin/
+# CMD ["op-batcher"]
 
-FROM --platform=$TARGETPLATFORM $TARGET_BASE_IMAGE AS op-proposer-target
-COPY --from=op-proposer-builder /app/op-proposer/bin/op-proposer /usr/local/bin/
-CMD ["op-proposer"]
+# FROM --platform=$TARGETPLATFORM $TARGET_BASE_IMAGE AS op-proposer-target
+# COPY --from=op-proposer-builder /app/op-proposer/bin/op-proposer /usr/local/bin/
+# CMD ["op-proposer"]
 
 # FROM --platform=$TARGETPLATFORM $TARGET_BASE_IMAGE AS op-conductor-target
 # COPY --from=op-conductor-builder /app/op-conductor/bin/op-conductor /usr/local/bin/
