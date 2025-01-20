@@ -210,7 +210,10 @@ func (x XterioCommitment) TxData() []byte {
 }
 
 func (x XterioCommitment) Verify(input []byte) error {
-	return proto.Unmarshal(input, &xterio.XterioCommitment{})
+	if !bytes.Equal(crypto.Keccak256(input), x.Encode()) {
+		return ErrCommitmentMismatch
+	}
+	return nil
 }
 
 func (x XterioCommitment) String() string {
