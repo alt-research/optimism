@@ -59,10 +59,10 @@ func (s *AltDADataSource) Next(ctx context.Context) (eth.Data, error) {
 		}
 		x := &xterio.XterioCommitment{}
 		if err := proto.Unmarshal(data, x); err == nil {
-			s.comm = altda.XterioCommitment(data)
 			if x, ok := x.GetValue().(*xterio.XterioCommitment_Raw); ok {
 				return x.Raw, nil
 			}
+			s.comm = altda.XterioCommitment(data)
 		} else {
 			// If the tx data type is not altDA, we forward it downstream to let the next
 			// steps validate and potentially parse it as L1 DA inputs.
