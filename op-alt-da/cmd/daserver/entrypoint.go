@@ -41,7 +41,7 @@ func StartDAServer(cliCtx *cli.Context) error {
 		store = s3
 	}
 
-	server := altda.NewDAServer(cliCtx.String(ListenAddrFlagName), cliCtx.Int(PortFlagName), store, l, cfg.UseGenericComm)
+	server := altda.NewDAServer(cliCtx.String(ListenAddrFlagName), cliCtx.Int(PortFlagName), store, l, cfg.UseGenericComm, cfg.UseXterioComm)
 
 	if err := server.Start(); err != nil {
 		return fmt.Errorf("failed to start the DA server")

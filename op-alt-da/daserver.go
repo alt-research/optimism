@@ -145,8 +145,10 @@ func (d *DAServer) HandlePut(w http.ResponseWriter, r *http.Request) {
 
 	if r.URL.Path == "/put" || r.URL.Path == "/put/" { // without commitment
 		var comm []byte
+		var key []byte
 		if d.useXterioComm {
-			comm = NewXterioCommitmentData(input).Encode()
+			comm := NewXterioCommitmentData(input)
+			key = XterioCommitment(comm).Encode()
 		} else {
 			if d.useGenericComm {
 				n, err := rand.Int(rand.Reader, big.NewInt(99999999999999))
@@ -162,9 +164,10 @@ func (d *DAServer) HandlePut(w http.ResponseWriter, r *http.Request) {
 			} else {
 				comm = NewKeccak256Commitment(input).Encode()
 			}
+			key = comm
 		}
 
-		if err = d.store.Put(r.Context(), comm, input); err != nil {
+		if err = d.store.Put(r.Context(), key, input); err != nil {
 			d.log.Error("Failed to store commitment to the DA server", "err", err, "comm", comm)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
