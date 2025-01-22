@@ -145,8 +145,10 @@ func (d *DAServer) HandlePut(w http.ResponseWriter, r *http.Request) {
 
 	if r.URL.Path == "/put" || r.URL.Path == "/put/" { // without commitment
 		var comm []byte
+		var srcComm XterioCommitment
 		if d.useXterioComm {
-			comm = NewXterioCommitmentData(input).Encode()
+			srcComm = NewXterioCommitmentData(input)
+			comm = srcComm.Encode()
 		} else {
 			if d.useGenericComm {
 				n, err := rand.Int(rand.Reader, big.NewInt(99999999999999))
@@ -170,6 +172,12 @@ func (d *DAServer) HandlePut(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		d.log.Info("stored commitment", "key", hex.EncodeToString(comm), "input_len", len(input))
+
+		if d.useXterioComm {
+			// response comm for xterio type should use `srcComm` rather than `comm`
+			comm = srcComm
+			d.log.Info("response comm for xterio commitment", "key", hex.EncodeToString(comm), "input_len", len(input))
+		}
 
 		if _, err := w.Write(comm); err != nil {
 			d.log.Error("Failed to write commitment request body", "err", err, "comm", comm)
