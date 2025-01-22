@@ -57,7 +57,15 @@ func (s *AltDADataSource) Next(ctx context.Context) (eth.Data, error) {
 		if len(data) == 0 {
 			return nil, NotEnoughData
 		}
-		if err := proto.Unmarshal(data, &xterio.XterioCommitment{}); err == nil {
+		x := &xterio.XterioCommitment{}
+		// decide whether this data is xterio type commitment
+		if err := proto.Unmarshal(data, x); err == nil {
+			// xterio commitment allow Digest/Raw type. if it's Raw, means this is the raw data for da data, return with
+			// the raw data rather than try to access the da server.
+			// Notice it must before `s.comm` for `s.comm` should be nil at here, can not set a value for it.
+			if x, ok := x.GetValue().(*xterio.XterioCommitment_Raw); ok {
+				return x.Raw, nil
+			}
 			s.comm = altda.XterioCommitment(data)
 		} else {
 			// If the tx data type is not altDA, we forward it downstream to let the next
