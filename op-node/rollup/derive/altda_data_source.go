@@ -64,6 +64,7 @@ func (s *AltDADataSource) Next(ctx context.Context) (eth.Data, error) {
 			// the raw data rather than try to access the da server.
 			// Notice it must before `s.comm` for `s.comm` should be nil at here, can not set a value for it.
 			if x, ok := x.GetValue().(*xterio.XterioCommitment_Raw); ok {
+				s.log.Info("This commitment is XterioCommitment Raw type, return data directly rather than get data from da server.", "raw", data[0:16])
 				return x.Raw, nil
 			}
 			s.comm = altda.XterioCommitment(data)
