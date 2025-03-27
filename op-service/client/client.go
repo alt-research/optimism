@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"github.com/ethereum/go-ethereum/log"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum"
@@ -231,6 +232,7 @@ func (ic *InstrumentedClient) PendingTransactionCount(ctx context.Context) (uint
 
 func (ic *InstrumentedClient) CallContract(ctx context.Context, msg ethereum.CallMsg, blockNumber *big.Int) ([]byte, error) {
 	return instrument2(ic.m, "eth_call", func() ([]byte, error) {
+		log.Info("cline:eth_call", "msg:", msg)
 		return ic.c.CallContract(ctx, msg, blockNumber)
 	})
 }
