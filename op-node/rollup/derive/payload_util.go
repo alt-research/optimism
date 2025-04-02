@@ -6,6 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ethereum-optimism/optimism/op-node/rollup"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
@@ -42,11 +43,17 @@ func PayloadToBlockRef(rollupCfg *rollup.Config, payload *eth.ExecutionPayload) 
 		sequenceNumber = info.SequenceNumber
 	}
 
+	// adapts millisecond part
+	milliPart := uint64(payload.PrevRandao[0])*256 + uint64(payload.PrevRandao[1])
+	log.Debug("generate l2 block ref by payload", "timestamp_ms", milliPart,
+		"payload timestamp", payload.Timestamp, "block num", payload.BlockNumber)
+
 	return eth.L2BlockRef{
 		Hash:           payload.BlockHash,
 		Number:         uint64(payload.BlockNumber),
 		ParentHash:     payload.ParentHash,
 		Time:           uint64(payload.Timestamp),
+		MilliTime:      milliPart,
 		L1Origin:       l1Origin,
 		SequenceNumber: sequenceNumber,
 	}, nil

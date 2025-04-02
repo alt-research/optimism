@@ -46,7 +46,7 @@ func WithPayload(payload []byte) func(opts *ExecuteOpts) {
 
 func WithPendingMessage(emitter *EmitterContract, chain *Chain, number uint64, logIndex int, msg string) func(opts *ExecuteOpts) {
 	return func(opts *ExecuteOpts) {
-		blockTime := chain.RollupCfg.TimestampForBlock(number)
+		blockTime := chain.RollupCfg.MillisecondTimestampForBlock(number)
 		id := inbox.Identifier{
 			Origin:      emitter.Address(chain),
 			BlockNumber: big.NewInt(int64(number)),

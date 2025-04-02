@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/log"
 
 	"github.com/ethereum-optimism/optimism/op-node/rollup"
 	"github.com/ethereum-optimism/optimism/op-service/eth"
@@ -101,22 +102,22 @@ func (ba *FetchingAttributesBuilder) PreparePayloadAttributes(ctx context.Contex
 		seqNumber = l2Parent.SequenceNumber + 1
 	}
 
-	nextL2Time := l2Parent.Time + ba.rollupCfg.BlockTime
+	nextL2MilliTime := ba.rollupCfg.NextMillisecondBlockTime(l2Parent.MillisecondTimestamp())
 	// Sanity check the L1 origin was correctly selected to maintain the time invariant between L1 and L2
-	if !ba.testSkipL1OriginCheck && nextL2Time < l1Info.Time() {
+	if !ba.testSkipL1OriginCheck && nextL2MilliTime < l1Info.MillisecondTimestamp() {
 		return nil, NewResetError(fmt.Errorf("cannot build L2 block on top %s for time %d before L1 origin %s at time %d",
-			l2Parent, nextL2Time, eth.ToBlockID(l1Info), l1Info.Time()))
+			l2Parent, nextL2MilliTime, eth.ToBlockID(l1Info), l1Info.Time()))
 	}
 
 	var upgradeTxs []hexutil.Bytes
-	if ba.rollupCfg.IsEcotoneActivationBlock(nextL2Time) {
+	if ba.rollupCfg.IsEcotoneActivationBlock(nextL2MilliTime / 1000) {
 		upgradeTxs, err = EcotoneNetworkUpgradeTransactions()
 		if err != nil {
 			return nil, NewCriticalError(fmt.Errorf("failed to build ecotone network upgrade txs: %w", err))
 		}
 	}
 
-	if ba.rollupCfg.IsFjordActivationBlock(nextL2Time) {
+	if ba.rollupCfg.IsFjordActivationBlock(nextL2MilliTime / 1000) {
 		fjord, err := FjordNetworkUpgradeTransactions()
 		if err != nil {
 			return nil, NewCriticalError(fmt.Errorf("failed to build fjord network upgrade txs: %w", err))
@@ -124,7 +125,7 @@ func (ba *FetchingAttributesBuilder) PreparePayloadAttributes(ctx context.Contex
 		upgradeTxs = append(upgradeTxs, fjord...)
 	}
 
-	if ba.rollupCfg.IsIsthmusActivationBlock(nextL2Time) {
+	if ba.rollupCfg.IsIsthmusActivationBlock(nextL2MilliTime / 1000) {
 		isthmus, err := IsthmusNetworkUpgradeTransactions()
 		if err != nil {
 			return nil, NewCriticalError(fmt.Errorf("failed to build isthmus network upgrade txs: %w", err))
@@ -132,7 +133,7 @@ func (ba *FetchingAttributesBuilder) PreparePayloadAttributes(ctx context.Contex
 		upgradeTxs = append(upgradeTxs, isthmus...)
 	}
 
-	l1InfoTx, err := L1InfoDepositBytes(ba.rollupCfg, sysConfig, seqNumber, l1Info, nextL2Time)
+	l1InfoTx, err := L1InfoDepositBytes(ba.rollupCfg, sysConfig, seqNumber, l1Info, nextL2MilliTime)
 	if err != nil {
 		return nil, NewCriticalError(fmt.Errorf("failed to create l1InfoTx: %w", err))
 	}
@@ -146,12 +147,12 @@ func (ba *FetchingAttributesBuilder) PreparePayloadAttributes(ctx context.Contex
 	txs = append(txs, upgradeTxs...)
 
 	var withdrawals *types.Withdrawals
-	if ba.rollupCfg.IsCanyon(nextL2Time) {
+	if ba.rollupCfg.IsCanyon(nextL2MilliTime / 1000) {
 		withdrawals = &types.Withdrawals{}
 	}
 
 	var parentBeaconRoot *common.Hash
-	if ba.rollupCfg.IsEcotone(nextL2Time) {
+	if ba.rollupCfg.IsEcotone(nextL2MilliTime / 1000) {
 		parentBeaconRoot = l1Info.ParentBeaconRoot()
 		if parentBeaconRoot == nil { // default to zero hash if there is no beacon-block-root available
 			parentBeaconRoot = new(common.Hash)
@@ -159,7 +160,6 @@ func (ba *FetchingAttributesBuilder) PreparePayloadAttributes(ctx context.Contex
 	}
 
 	r := &eth.PayloadAttributes{
-		Timestamp:             hexutil.Uint64(nextL2Time),
 		PrevRandao:            eth.Bytes32(l1Info.MixDigest()),
 		SuggestedFeeRecipient: predeploys.SequencerFeeVaultAddr,
 		Transactions:          txs,
@@ -168,7 +168,14 @@ func (ba *FetchingAttributesBuilder) PreparePayloadAttributes(ctx context.Contex
 		Withdrawals:           withdrawals,
 		ParentBeaconBlockRoot: parentBeaconRoot,
 	}
-	if ba.rollupCfg.IsHolocene(nextL2Time) {
+	isVoltaTime := ba.rollupCfg.IsVolta(nextL2MilliTime / 1000)
+	r.SetMillisecondTimestamp(nextL2MilliTime, isVoltaTime)
+	if isVoltaTime {
+		log.Debug("succeed to build payload attributes after fork",
+			"timestamp_ms", nextL2MilliTime, "seconds-timestamp", r.Timestamp,
+			"l1 origin", l1Info.NumberU64(), "l2 parent block", l2Parent.Number)
+	}
+	if ba.rollupCfg.IsHolocene(nextL2MilliTime / 1000) {
 		r.EIP1559Params = new(eth.Bytes8)
 		*r.EIP1559Params = sysConfig.EIP1559Params
 	}

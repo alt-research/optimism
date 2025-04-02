@@ -47,7 +47,7 @@ func (s *nonCompressor) FullErr() error {
 
 type channelOut interface {
 	ChannelOut
-	addSingularBatch(batch *SingularBatch, seqNum uint64) error
+	addSingularBatch(cfg *rollup.Config, batch *SingularBatch, seqNum uint64) error
 }
 
 // channelTypes allows tests to run against different channel types
@@ -119,7 +119,8 @@ func TestOutputFrameNoEmptyLastFrame(t *testing.T) {
 			txCount := 1
 			singularBatch := RandomSingularBatch(rng, txCount, rollupCfg.L2ChainID)
 
-			err := cout.addSingularBatch(singularBatch, 0)
+			var cfg rollup.Config
+			err := cout.addSingularBatch(&cfg, singularBatch, 0)
 			var written uint64
 			require.NoError(t, err)
 
@@ -279,7 +280,8 @@ func funcName(fn any) string {
 func SpanChannelOutCompressionOnlyOneBatch(t *testing.T, algo CompressionAlgo) {
 	cout, singularBatches := SpanChannelAndBatches(t, 300, 2, algo)
 
-	err := cout.addSingularBatch(singularBatches[0], 0)
+	var cfg rollup.Config
+	err := cout.addSingularBatch(&cfg, singularBatches[0], 0)
 	// confirm compression was not skipped
 	require.Greater(t, cout.compressor.Len(), 0)
 	require.NoError(t, err)
@@ -288,7 +290,7 @@ func SpanChannelOutCompressionOnlyOneBatch(t *testing.T, algo CompressionAlgo) {
 	require.ErrorIs(t, cout.FullErr(), ErrCompressorFull)
 
 	// confirm adding another batch would cause the same full error
-	err = cout.addSingularBatch(singularBatches[1], 0)
+	err = cout.addSingularBatch(&cfg, singularBatches[1], 0)
 	require.ErrorIs(t, err, ErrCompressorFull)
 }
 
@@ -297,7 +299,8 @@ func SpanChannelOutCompressionUndo(t *testing.T, algo CompressionAlgo) {
 	// target is larger than one batch, but smaller than two batches
 	cout, singularBatches := SpanChannelAndBatches(t, 1100, 2, algo)
 
-	err := cout.addSingularBatch(singularBatches[0], 0)
+	var cfg rollup.Config
+	err := cout.addSingularBatch(&cfg, singularBatches[0], 0)
 	require.NoError(t, err)
 	// confirm that the first compression was skipped
 	if algo == Zlib {
@@ -308,7 +311,7 @@ func SpanChannelOutCompressionUndo(t *testing.T, algo CompressionAlgo) {
 	// record the RLP length to confirm it doesn't change when adding a rejected batch
 	rlp1 := cout.activeRLP().Len()
 
-	err = cout.addSingularBatch(singularBatches[1], 0)
+	err = cout.addSingularBatch(&cfg, singularBatches[1], 0)
 	require.ErrorIs(t, err, ErrCompressorFull)
 	// confirm that the second compression was not skipped
 	require.Greater(t, cout.compressor.Len(), 0)
@@ -323,7 +326,8 @@ func SpanChannelOutClose(t *testing.T, algo CompressionAlgo) {
 	target := uint64(1100)
 	cout, singularBatches := SpanChannelAndBatches(t, target, 1, algo)
 
-	err := cout.addSingularBatch(singularBatches[0], 0)
+	var cfg rollup.Config
+	err := cout.addSingularBatch(&cfg, singularBatches[0], 0)
 	require.NoError(t, err)
 	// confirm no compression has happened yet
 
@@ -418,7 +422,8 @@ func testSpanChannelOut_MaxBlocksPerSpanBatch(t *testing.T, tt maxBlocksTest) {
 	for i, b := range bs {
 		b.EpochNum = rollup.Epoch(l1Origin.Number)
 		b.EpochHash = l1Origin.Hash
-		err := cout.addSingularBatch(b, uint64(i))
+		var cfg rollup.Config
+		err := cout.addSingularBatch(&cfg, b, uint64(i))
 		if i != tt.numBatches-1 || tt.exactFull {
 			require.NoErrorf(t, err, "iteration %d", i)
 		} else {
@@ -469,7 +474,7 @@ func testSpanChannelOut_MaxBlocksPerSpanBatch(t *testing.T, tt maxBlocksTest) {
 		bd, err := br()
 		require.NoError(t, err)
 		require.EqualValues(t, SpanBatchType, bd.GetBatchType())
-		sb, err := DeriveSpanBatch(bd, rollupCfg.BlockTime, rollupCfg.Genesis.L2Time, cout.spanBatch.ChainID)
+		sb, err := DeriveSpanBatch(bd, &rollupCfg, rollupCfg.Genesis.L2Time, cout.spanBatch.ChainID)
 		require.NoError(t, err)
 		require.Equal(t, expBlocks, sb.GetBlockCount())
 		sbs0, err := sb.GetSingularBatches([]eth.L1BlockRef{l1Origin}, l2SafeHead)
@@ -509,7 +514,8 @@ func testSpanChannelOut_MaxRLPBytesPerChannel(t *testing.T, algo CompressionAlgo
 	cout.rlp[1] = bytes.NewBuffer(make([]byte, maxRLPBytesPerChannel))
 	cout.sealedRLPBytes = maxRLPBytesPerChannel
 
-	err := cout.addSingularBatch(singularBatches[0], 1)
+	var cfg rollup.Config
+	err := cout.addSingularBatch(&cfg, singularBatches[0], 1)
 	require.ErrorIs(t, err, ErrTooManyRLPBytes, "error should be ErrTooManyRLPBytes")
 
 	require.Equal(t, cout.activeRLP().Len(), maxRLPBytesPerChannel, "active RLP should be equal to the max RLP limit")

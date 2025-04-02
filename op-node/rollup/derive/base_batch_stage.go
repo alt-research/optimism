@@ -89,7 +89,7 @@ func (bs *baseBatchStage) nextFromSpanBatch(parent eth.L2BlockRef) (*SingularBat
 	if len(bs.nextSpan) > 0 {
 		// There are cached singular batches derived from the span batch.
 		// Check if the next cached batch matches the given parent block.
-		if bs.nextSpan[0].Timestamp == parent.Time+bs.config.BlockTime {
+		if bs.nextSpan[0].Timestamp == bs.config.NextMillisecondBlockTime(parent.MillisecondTimestamp()) {
 			// Pop first one and return.
 			nextBatch := bs.popNextBatch(parent)
 			// len(bq.nextSpan) == 0 means it's the last batch of the span.
@@ -167,10 +167,10 @@ func (bs *baseBatchStage) deriveNextEmptyBatch(ctx context.Context, outOfData bo
 	expiryEpoch := epoch.Number + bs.config.SeqWindowSize
 	forceEmptyBatches := (expiryEpoch == bs.origin.Number && outOfData) || expiryEpoch < bs.origin.Number
 	firstOfEpoch := epoch.Number == parent.L1Origin.Number+1
-	nextTimestamp := parent.Time + bs.config.BlockTime
+	nextMilliTimestamp := bs.config.NextMillisecondBlockTime(parent.MillisecondTimestamp())
 
 	bs.log.Trace("Potentially generating an empty batch",
-		"expiryEpoch", expiryEpoch, "forceEmptyBatches", forceEmptyBatches, "nextTimestamp", nextTimestamp,
+		"expiryEpoch", expiryEpoch, "forceEmptyBatches", forceEmptyBatches, "nextMilliTimestamp", nextMilliTimestamp,
 		"epoch_time", epoch.Time, "len_l1_blocks", len(bs.l1Blocks), "firstOfEpoch", firstOfEpoch)
 
 	if !forceEmptyBatches {
@@ -187,13 +187,13 @@ func (bs *baseBatchStage) deriveNextEmptyBatch(ctx context.Context, outOfData bo
 	// Fill with empty L2 blocks of the same epoch until we meet the time of the next L1 origin,
 	// to preserve that L2 time >= L1 time. If this is the first block of the epoch, always generate a
 	// batch to ensure that we at least have one batch per epoch.
-	if nextTimestamp < nextEpoch.Time || firstOfEpoch {
-		bs.log.Info("Generating next batch", "epoch", epoch, "timestamp", nextTimestamp)
+	if nextMilliTimestamp < nextEpoch.MillisecondTimestamp() || firstOfEpoch {
+		bs.log.Info("Generating next batch", "epoch", epoch, "timestamp", nextMilliTimestamp)
 		return &SingularBatch{
 			ParentHash:   parent.Hash,
 			EpochNum:     rollup.Epoch(epoch.Number),
 			EpochHash:    epoch.Hash,
-			Timestamp:    nextTimestamp,
+			Timestamp:    nextMilliTimestamp,
 			Transactions: nil,
 		}, nil
 	}
@@ -202,7 +202,7 @@ func (bs *baseBatchStage) deriveNextEmptyBatch(ctx context.Context, outOfData bo
 	// that we can, so we can advance to the next epoch.
 	// TODO(12444): Instead of manually advancing the epoch here, it may be better to generate a
 	// batch for the next epoch, so that updateOrigins then properly advances the origin.
-	bs.log.Trace("Advancing internal L1 blocks", "next_timestamp", nextTimestamp, "next_epoch_time", nextEpoch.Time)
+	bs.log.Trace("Advancing internal L1 blocks", "next_ms_timestamp", nextMilliTimestamp, "next_epoch_ms_time", nextEpoch.MillisecondTimestamp())
 	bs.l1Blocks = bs.l1Blocks[1:]
 	return nil, io.EOF
 }

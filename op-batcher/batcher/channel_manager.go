@@ -55,6 +55,8 @@ type channelManager struct {
 	channelQueue []*channel
 	// used to lookup channels by tx ID upon tx success / failure
 	txChannels map[string]*channel
+
+	isVolta bool
 }
 
 func NewChannelManager(log log.Logger, metr metrics.Metricer, cfgProvider ChannelConfigProvider, rollupCfg *rollup.Config) *channelManager {
@@ -393,12 +395,21 @@ func (s *channelManager) processBlocks() error {
 			"channel_full", s.currentChannel.IsFull(),
 			"input_bytes", s.currentChannel.InputBytes(),
 			"ready_bytes", s.currentChannel.ReadyBytes(),
+			"is_volta", s.isVolta,
 		)
 	}()
 
 	for i := s.blockCursor; ; i++ {
 		block, ok := s.blocks.PeekN(i)
 		if !ok {
+			break
+		}
+
+		if !s.isVolta && s.rollupCfg.IsVolta(block.Time()) && s.currentChannel.InputBytes() != 0 {
+			// the current channel is before volta fork.
+			s.currentChannel.Close()
+			s.isVolta = true
+			log.Info("before volta fork channel", "channel_id", s.currentChannel.ID(), "block_time", block.Time())
 			break
 		}
 
@@ -470,6 +481,13 @@ func (s *channelManager) AddL2Block(block *types.Block) error {
 		return ErrReorg
 	}
 
+	if s.tip == (common.Hash{}) && s.rollupCfg.IsVolta(block.Time()) {
+		// set volta flag at startup
+		s.isVolta = true
+		log.Info("succeed to set is_volta flag", "block_time", block.Time(),
+			"l2 block num", block.Number())
+	}
+
 	s.metr.RecordL2BlockInPendingQueue(block)
 	s.blocks.Enqueue(block)
 	s.tip = block.Hash()
@@ -478,11 +496,20 @@ func (s *channelManager) AddL2Block(block *types.Block) error {
 }
 
 func l2BlockRefFromBlockAndL1Info(block *types.Block, l1info *derive.L1BlockInfo) eth.L2BlockRef {
+	milliPart := uint64(0)
+	if block.MixDigest() != (common.Hash{}) {
+		// adapts l2 millisecond, highest 2 bytes as milli-part.
+		milliPart = uint64(eth.Bytes32(block.MixDigest())[0])*256 + uint64(eth.Bytes32(block.MixDigest())[1])
+	}
+
+	log.Debug("generate l2 block ref:", "milli-timestamp", milliPart,
+		"seconds-timestamp", block.Time(), "l2 block number", block.Number())
 	return eth.L2BlockRef{
 		Hash:           block.Hash(),
 		Number:         block.NumberU64(),
 		ParentHash:     block.ParentHash(),
 		Time:           block.Time(),
+		MilliTime:      milliPart,
 		L1Origin:       eth.BlockID{Hash: l1info.BlockHash, Number: l1info.Number},
 		SequenceNumber: l1info.SequenceNumber,
 	}

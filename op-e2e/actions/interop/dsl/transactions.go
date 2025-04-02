@@ -74,7 +74,7 @@ func (m *GeneratedTransaction) Identifier() inbox.Identifier {
 }
 
 func Identifier(chain *Chain, tx *types.Transaction, rcpt *types.Receipt) inbox.Identifier {
-	blockTime := chain.RollupCfg.TimestampForBlock(rcpt.BlockNumber.Uint64())
+	blockTime := chain.RollupCfg.MillisecondTimestampForBlock(rcpt.BlockNumber.Uint64())
 	return inbox.Identifier{
 		Origin:      *tx.To(),
 		BlockNumber: rcpt.BlockNumber,
@@ -103,7 +103,7 @@ func (m *GeneratedTransaction) CheckNotIncluded() {
 
 func (m *GeneratedTransaction) PendingIdentifier(chain *Chain, logIndex int) inbox.Identifier {
 	head := chain.Sequencer.L2Unsafe()
-	blockTime := chain.RollupCfg.TimestampForBlock(head.Number)
+	blockTime := chain.RollupCfg.MillisecondTimestampForBlock(head.Number)
 	return inbox.Identifier{
 		Origin:      *m.tx.To(),
 		BlockNumber: big.NewInt(int64(head.Number + 1)),

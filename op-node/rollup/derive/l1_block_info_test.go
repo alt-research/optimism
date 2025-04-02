@@ -132,7 +132,7 @@ func TestParseL1InfoDepositTxData(t *testing.T) {
 	t.Run("activation-block ecotone", func(t *testing.T) {
 		rng := rand.New(rand.NewSource(1234))
 		info := testutils.MakeBlockInfo(nil)(rng)
-		rollupCfg := rollup.Config{BlockTime: 2, Genesis: rollup.Genesis{L2Time: 1000}}
+		rollupCfg := rollup.Config{BlockTime: 2000, Genesis: rollup.Genesis{L2Time: 1000}}
 		rollupCfg.ActivateAtGenesis(rollup.Delta)
 		ecotoneTime := rollupCfg.Genesis.L2Time + rollupCfg.BlockTime // activate ecotone just after genesis
 		rollupCfg.EcotoneTime = &ecotoneTime

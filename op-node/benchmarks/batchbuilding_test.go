@@ -392,7 +392,8 @@ func BenchmarkGetRawSpanBatch(b *testing.B) {
 					require.NoError(b, err)
 				}
 				b.StartTimer()
-				_, err := spanBatch.ToRawSpanBatch()
+				var cfg rollup.Config
+				_, err := spanBatch.ToRawSpanBatch(&cfg)
 				require.NoError(b, err)
 			}
 		})

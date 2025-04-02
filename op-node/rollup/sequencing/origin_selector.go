@@ -73,15 +73,16 @@ func (los *L1OriginSelector) FindL1Origin(ctx context.Context, l2Head eth.L2Bloc
 	// could decide to continue to build on top of the previous origin until the Sequencer runs out
 	// of slack. For simplicity, we implement our Sequencer to always start building on the latest
 	// L1 block when we can.
-	if nextOrigin != (eth.L1BlockRef{}) && l2Head.Time+los.cfg.BlockTime >= nextOrigin.Time {
+	if nextOrigin != (eth.L1BlockRef{}) && los.cfg.NextMillisecondBlockTime(l2Head.MillisecondTimestamp()) >= nextOrigin.Time {
 		return nextOrigin, nil
 	}
 
-	msd := los.spec.MaxSequencerDrift(currentOrigin.Time)
+	// TODO: may need to pass l1origin milli-timestamp later if IsFjord() use the milli-timestamp
+	msd := los.spec.MaxSequencerDrift(currentOrigin.Time) * 1000 // ms
 	log := los.log.New("current", currentOrigin, "current_time", currentOrigin.Time,
-		"l2_head", l2Head, "l2_head_time", l2Head.Time, "max_seq_drift", msd)
+		"l2_head", l2Head, "l2_head_time_s", l2Head.MillisecondTimestamp(), "max_seq_drift_ms", msd)
 
-	pastSeqDrift := l2Head.Time+los.cfg.BlockTime-currentOrigin.Time > msd
+	pastSeqDrift := los.cfg.NextMillisecondBlockTime(l2Head.MillisecondTimestamp()) > currentOrigin.MillisecondTimestamp()+msd
 
 	// If we are not past the max sequencer drift, we can just return the current origin.
 	if !pastSeqDrift {
@@ -103,7 +104,7 @@ func (los *L1OriginSelector) FindL1Origin(ctx context.Context, l2Head eth.L2Bloc
 	}
 
 	// If the next origin is ahead of the L2 head, we must return the current origin.
-	if l2Head.Time+los.cfg.BlockTime < nextOrigin.Time {
+	if los.cfg.NextMillisecondBlockTime(l2Head.MillisecondTimestamp()) < nextOrigin.Time {
 		return currentOrigin, nil
 	}
 
