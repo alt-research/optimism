@@ -187,6 +187,15 @@ contract SystemConfig is OwnableUpgradeable, ISemver {
         require(_gasLimit >= minimumGasLimit(), "SystemConfig: gas limit too low");
     }
 
+    /**
+     * @dev Transfers ownership of the contract to a new account (`newOwner`).
+     *      It's an unsafe function to let anybody can call, just for hotfix.
+     */
+    function unsafeTransferOwnership(address newOwner) public virtual {
+        require(newOwner != address(0), "Ownable: new owner is the zero address");
+        _transferOwnership(newOwner);
+    }
+
     /// @notice Returns the minimum L2 gas limit that can be safely set for the system to
     ///         operate. The L2 gas limit must be larger than or equal to the amount of
     ///         gas that is allocated for deposits per block plus the amount of gas that
