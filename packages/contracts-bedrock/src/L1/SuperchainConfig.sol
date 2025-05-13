@@ -91,4 +91,11 @@ contract SuperchainConfig is Initializable, ISemver {
         Storage.setAddress(GUARDIAN_SLOT, _guardian);
         emit ConfigUpdate(UpdateType.GUARDIAN, abi.encode(_guardian));
     }
+
+    /// @notice Sets the guardian address. Only current guardian can execute this.
+    /// @param _guardian The new guardian address.
+    function setGuardian(address _guardian) external {
+        require(msg.sender == guardian(), "SuperchainConfig: only guardian can set new guardian");
+        _setGuardian(_guardian);
+    }
 }
