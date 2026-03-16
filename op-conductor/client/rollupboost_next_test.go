@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,61 +12,34 @@ import (
 func TestRollupBoostNextHealthcheck(t *testing.T) {
 	testCases := []struct {
 		name       string
-		response   interface{}
+		body       string
 		statusCode int
 		wantStatus HealthStatus
 		wantErr    string
 	}{
 		{
-			name: "healthy",
-			response: RollupBoostNextHealthResponse{
-				Version:           "1.0.0",
-				RollupBoostHealth: "Healthy", // JSON API value
-			},
+			name:       "healthy",
+			body:       "OK",
 			statusCode: http.StatusOK,
 			wantStatus: HealthStatusHealthy,
 		},
 		{
-			name: "partial",
-			response: RollupBoostNextHealthResponse{
-				Version:           "1.0.0",
-				RollupBoostHealth: "PartialContent", // JSON API value
-			},
-			statusCode: http.StatusOK,
+			name:       "partial",
+			body:       "Partial Content",
+			statusCode: http.StatusPartialContent,
 			wantStatus: HealthStatusPartial,
 		},
 		{
-			name: "unhealthy",
-			response: RollupBoostNextHealthResponse{
-				Version:           "1.0.0",
-				RollupBoostHealth: "ServiceUnavailable", // JSON API value
-			},
-			statusCode: http.StatusOK,
+			name:       "unhealthy",
+			body:       "Service Unavailable",
+			statusCode: http.StatusServiceUnavailable,
 			wantStatus: HealthStatusUnhealthy,
 		},
 		{
-			name: "unexpected status code",
-			response: RollupBoostNextHealthResponse{
-				Version:           "1.0.0",
-				RollupBoostHealth: "Healthy", // JSON API value
-			},
+			name:       "unexpected status code",
+			body:       "Accepted",
 			statusCode: http.StatusAccepted,
 			wantErr:    "unexpected status code: 202",
-		},
-		{
-			name:       "malformed json",
-			response:   "{not-json",
-			statusCode: http.StatusOK,
-			wantErr:    "failed to decode response",
-		},
-		{
-			name: "unknown health",
-			response: RollupBoostNextHealthResponse{
-				Version:           "1.0.0",
-				RollupBoostHealth: "Unknown",
-			},
-			statusCode: http.StatusOK,
-			wantErr:    `unexpected rollup_boost_health: "Unknown"`,
 		},
 	}
 
@@ -79,17 +51,10 @@ func TestRollupBoostNextHealthcheck(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				require.Equal(t, HealthzEndpoint, r.URL.Path)
 				w.WriteHeader(tc.statusCode)
-
-				switch v := tc.response.(type) {
-				case string:
-					_, _ = w.Write([]byte(v))
-				default:
-					require.NoError(t, json.NewEncoder(w).Encode(v))
-				}
+				_, _ = w.Write([]byte(tc.body))
 			}))
 			defer server.Close()
 
-			// Pass full URL including path
 			client := NewRollupBoostNextClient(server.URL+HealthzEndpoint, server.Client())
 			status, err := client.Healthcheck(context.Background())
 

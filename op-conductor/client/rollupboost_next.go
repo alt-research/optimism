@@ -2,29 +2,18 @@ package client
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 )
 
-// JSON API health status values returned by rollup-boost
-const (
-	jsonHealthStatusHealthy   = "Healthy"
-	jsonHealthStatusPartial   = "PartialContent"
-	jsonHealthStatusUnhealthy = "ServiceUnavailable"
-)
-
-// RollupBoostNextClient retrieves rollup-boost health using the JSON-based healthcheck endpoint.
+// RollupBoostNextClient retrieves rollup-boost health using the HTTP-based healthcheck endpoint.
+// It interprets the HTTP status code to determine health:
+//   - 200 OK: Healthy (both L2 and builder producing blocks)
+//   - 206 Partial Content: L2 healthy but builder is not
+//   - 503 Service Unavailable: unhealthy
 type RollupBoostNextClient struct {
 	url        string
 	httpClient *http.Client
-}
-
-// RollupBoostNextHealthResponse captures the JSON payload returned by the rollup-boost health endpoint.
-type RollupBoostNextHealthResponse struct {
-	Version           string `json:"version"`
-	RollupBoostHealth string `json:"rollup_boost_health"`
 }
 
 // NewRollupBoostNextClient constructs a client for querying the rollup-boost health endpoint.
@@ -39,7 +28,7 @@ func NewRollupBoostNextClient(url string, httpClient *http.Client) *RollupBoostN
 	}
 }
 
-// Healthcheck fetches the rollup-boost health endpoint and interprets the JSON payload.
+// Healthcheck fetches the rollup-boost health endpoint and interprets the HTTP status code.
 func (c *RollupBoostNextClient) Healthcheck(ctx context.Context) (HealthStatus, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.url, nil)
 	if err != nil {
@@ -52,26 +41,15 @@ func (c *RollupBoostNextClient) Healthcheck(ctx context.Context) (HealthStatus, 
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
-	var payload RollupBoostNextHealthResponse
-	// Limit response size to 1 MiB to prevent memory exhaustion from malicious servers
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&payload); err != nil {
-		return "", fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	// Map JSON API values to internal constants
-	switch payload.RollupBoostHealth {
-	case jsonHealthStatusHealthy:
+	switch resp.StatusCode {
+	case http.StatusOK:
 		return HealthStatusHealthy, nil
-	case jsonHealthStatusPartial:
+	case http.StatusPartialContent:
 		return HealthStatusPartial, nil
-	case jsonHealthStatusUnhealthy:
+	case http.StatusServiceUnavailable:
 		return HealthStatusUnhealthy, nil
 	default:
-		return "", fmt.Errorf("unexpected rollup_boost_health: %q", payload.RollupBoostHealth)
+		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 }
 
