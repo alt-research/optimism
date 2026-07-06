@@ -61,8 +61,45 @@ type DisputeGameFactoryContract struct {
 	contract    *batching.BoundContract
 	abi         *abi.ABI
 
+	// multicall3 is the address of the Multicall3 contract used to aggregate game-loading
+	// eth_calls into a single request. When zero, calls fall back to per-call JSON-RPC batching.
+	multicall3 common.Address
+
 	// getGameArgs supports the gameArgs call to the contract which is only supported from v1.3.0 onwards
 	getGameArgs gameArgsFunc
+}
+
+// EnableMulticall3 routes the homogeneous gameAtIndex reads issued by GetGamesAtOrAfter and
+// GetAllGames through the Multicall3 contract at the given address, collapsing what would be one
+// eth_call per game into a single aggregate3 eth_call per batch. This dramatically reduces the
+// number of L1 RPC requests (and rate-limit usage) each update cycle. Passing the zero address
+// disables aggregation and restores per-call JSON-RPC batching.
+func (f *DisputeGameFactoryContract) EnableMulticall3(addr common.Address) {
+	f.multicall3 = addr
+}
+
+// loadGames executes homogeneous gameAtIndex reads, aggregating them into Multicall3 requests
+// when enabled (one aggregate3 eth_call per BatchSize chunk), otherwise falling back to per-call
+// JSON-RPC batching. Semantics are identical either way: the same reads at the same block.
+func (f *DisputeGameFactoryContract) loadGames(ctx context.Context, block rpcblock.Block, calls []*batching.ContractCall) ([]*batching.CallResult, error) {
+	if f.multicall3 == (common.Address{}) {
+		generic := make([]batching.Call, len(calls))
+		for i, c := range calls {
+			generic[i] = c
+		}
+		return f.multiCaller.Call(ctx, block, generic...)
+	}
+	batchSize := f.multiCaller.BatchSize()
+	results := make([]*batching.CallResult, 0, len(calls))
+	for start := 0; start < len(calls); start += batchSize {
+		end := min(start+batchSize, len(calls))
+		chunk, err := aggregateContractCalls(ctx, f.multiCaller, f.multicall3, block, calls[start:end])
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, chunk...)
+	}
+	return results, nil
 }
 
 func NewDisputeGameFactoryContract(ctx context.Context, m metrics.ContractMetricer, addr common.Address, caller *batching.MultiCaller) (*DisputeGameFactoryContract, error) {
@@ -220,7 +257,7 @@ func (f *DisputeGameFactoryContract) GetGamesAtOrAfter(ctx context.Context, bloc
 		if rangeEnd > batchSize {
 			rangeStart = rangeEnd - batchSize
 		}
-		calls := make([]batching.Call, 0, rangeEnd-rangeStart)
+		calls := make([]*batching.ContractCall, 0, rangeEnd-rangeStart)
 		for i := rangeEnd - 1; ; i-- {
 			calls = append(calls, f.contract.Call(methodGameAtIndex, new(big.Int).SetUint64(i)))
 			// Break once we've added the last call to avoid underflow when rangeStart == 0
@@ -229,7 +266,7 @@ func (f *DisputeGameFactoryContract) GetGamesAtOrAfter(ctx context.Context, bloc
 			}
 		}
 
-		results, err := f.multiCaller.Call(ctx, rpcblock.ByHash(blockHash), calls...)
+		results, err := f.loadGames(ctx, rpcblock.ByHash(blockHash), calls)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch games: %w", err)
 		}
@@ -253,12 +290,12 @@ func (f *DisputeGameFactoryContract) GetAllGames(ctx context.Context, blockHash 
 		return nil, err
 	}
 
-	calls := make([]batching.Call, count)
+	calls := make([]*batching.ContractCall, count)
 	for i := uint64(0); i < count; i++ {
 		calls[i] = f.contract.Call(methodGameAtIndex, new(big.Int).SetUint64(i))
 	}
 
-	results, err := f.multiCaller.Call(ctx, rpcblock.ByHash(blockHash), calls...)
+	results, err := f.loadGames(ctx, rpcblock.ByHash(blockHash), calls)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch games: %w", err)
 	}

@@ -135,6 +135,18 @@ var (
 		Usage:   "Minimum time between scheduling update cycles based on the L1 block time.",
 		EnvVars: prefixEnvVars("MIN_UPDATE_INTERVAL"),
 	}
+	L1RPCRateLimitFlag = &cli.Float64Flag{
+		Name:    "l1-rpc-rate-limit",
+		Usage:   "Maximum number of L1 RPC requests per second to issue (counted per individual call, including each element of a JSON-RPC batch). 0 disables rate limiting. Set below your provider's per-second limit to avoid rate-limit errors when loading games.",
+		EnvVars: prefixEnvVars("L1_RPC_RATE_LIMIT"),
+		Value:   0,
+	}
+	L1Multicall3AddressFlag = &cli.StringFlag{
+		Name:    "l1-multicall3-address",
+		Usage:   "Address of the L1 Multicall3 contract. Game-loading reads (gameAtIndex) are aggregated into a single aggregate3 eth_call instead of one call per game, drastically cutting L1 RPC request volume each update cycle. Defaults to the canonical Multicall3 address (deployed on mainnet, sepolia and most chains). Set empty to disable and fall back to per-call JSON-RPC batching.",
+		EnvVars: prefixEnvVars("L1_MULTICALL3_ADDRESS"),
+		Value:   "0xcA11bde05977b3631167028862bE2a173976CA11",
+	}
 	AdditionalBondClaimants = &cli.StringSliceFlag{
 		Name:    "additional-bond-claimants",
 		Usage:   "List of addresses to claim bonds for, in addition to the configured transaction sender",
@@ -283,6 +295,8 @@ var optionalFlags = []cli.Flag{
 	MaxPendingTransactionsFlag,
 	HTTPPollInterval,
 	MinUpdateInterval,
+	L1RPCRateLimitFlag,
+	L1Multicall3AddressFlag,
 	AdditionalBondClaimants,
 	GameAllowlistFlag,
 	CannonL2CustomFlag,
@@ -580,6 +594,14 @@ func NewConfigFromCLI(ctx *cli.Context, logger log.Logger) (*config.Config, erro
 	l1Beacon := ctx.String(L1BeaconFlag.Name)
 	l2Rpcs := ctx.StringSlice(L2EthRpcFlag.Name)
 	l2Experimental := ctx.String(L2ExperimentalEthRpcFlag.Name)
+
+	var multicall3Address common.Address
+	if addrStr := ctx.String(L1Multicall3AddressFlag.Name); addrStr != "" {
+		multicall3Address, err = opservice.ParseAddress(addrStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid %v: %w", L1Multicall3AddressFlag.Name, err)
+		}
+	}
 	return &config.Config{
 		// Required Flags
 		L1EthRpc:                l1EthRpc,
@@ -593,6 +615,8 @@ func NewConfigFromCLI(ctx *cli.Context, logger log.Logger) (*config.Config, erro
 		L2Rpcs:                  l2Rpcs,
 		MaxPendingTx:            ctx.Uint64(MaxPendingTransactionsFlag.Name),
 		PollInterval:            ctx.Duration(HTTPPollInterval.Name),
+		L1RPCRateLimit:          ctx.Float64(L1RPCRateLimitFlag.Name),
+		L1Multicall3Address:     multicall3Address,
 		MinUpdateInterval:       ctx.Duration(MinUpdateInterval.Name),
 		AdditionalBondClaimants: claimants,
 		RollupRpc:               ctx.String(RollupRpcFlag.Name),

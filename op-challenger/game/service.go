@@ -5,8 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"sync/atomic"
 	"time"
+
+	"golang.org/x/time/rate"
 
 	challengerClient "github.com/ethereum-optimism/optimism/op-challenger/game/client"
 	"github.com/ethereum-optimism/optimism/op-challenger/game/keccak"
@@ -146,7 +149,14 @@ func (s *Service) initL1Clients(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("failed to dial L1: %w", err)
 	}
 
-	l1RPC := client.NewBaseRPCClient(l1EthClient.Client(), client.WithCallTimeout(30*time.Second), client.WithBatchCallTimeout(60*time.Second))
+	var l1RPC client.RPC = client.NewBaseRPCClient(l1EthClient.Client(), client.WithCallTimeout(30*time.Second), client.WithBatchCallTimeout(60*time.Second))
+	if cfg.L1RPCRateLimit > 0 {
+		// Burst must be at least as large as the multicaller batch size, otherwise a single
+		// batched call (e.g. loading games) would exceed the burst and fail with ErrTokenCount.
+		burst := max(int(math.Ceil(cfg.L1RPCRateLimit)), batching.DefaultBatchSize)
+		l1RPC = client.NewRateLimitingClient(l1RPC, rate.Limit(cfg.L1RPCRateLimit), burst)
+		s.logger.Info("Rate limiting L1 RPC requests", "limit", cfg.L1RPCRateLimit, "burst", burst)
+	}
 	pollClient, err := client.NewRPCWithClient(ctx, s.logger, cfg.L1EthRpc, l1RPC, cfg.PollInterval)
 	if err != nil {
 		return fmt.Errorf("failed to create RPC client: %w", err)
@@ -206,6 +216,10 @@ func (s *Service) initFactoryContract(ctx context.Context, cfg *config.Config) e
 		batching.NewMultiCaller(s.l1RPC, batching.DefaultBatchSize))
 	if err != nil {
 		return fmt.Errorf("failed to create factory contract: %w", err)
+	}
+	if cfg.L1Multicall3Address != (common.Address{}) {
+		factoryContract.EnableMulticall3(cfg.L1Multicall3Address)
+		s.logger.Info("Aggregating game-loading L1 calls via Multicall3", "address", cfg.L1Multicall3Address)
 	}
 	s.factoryContract = factoryContract
 	return nil

@@ -248,6 +248,64 @@ func TestGetAllGamesAtOrAfter(t *testing.T) {
 	}
 }
 
+// TestGetGamesAtOrAfterMulticall3 verifies that with Multicall3 aggregation enabled,
+// GetGamesAtOrAfter loads the same games as the per-call path, but via a single aggregate3
+// eth_call per batch instead of one eth_call per game.
+func TestGetGamesAtOrAfterMulticall3(t *testing.T) {
+	// aggregate3 output element mirroring Multicall3.Result for abi packing in the stub.
+	type result3 struct {
+		Success    bool
+		ReturnData []byte
+	}
+	for _, version := range factoryVersions {
+		t.Run(version.String(), func(t *testing.T) {
+			blockHash := common.Hash{0xcc, 0xdd}
+			stubRpc, factory := setupDisputeGameFactoryTest(t, version)
+			factory.EnableMulticall3(CanonicalMulticall3Address)
+			stubRpc.AddContract(CanonicalMulticall3Address, multicall3Abi)
+
+			// Fits in a single batch so all games load via one aggregate3 call.
+			const gameCount = 5
+			var allGames []gameTypes.GameMetadata
+			for i := 0; i < gameCount; i++ {
+				allGames = append(allGames, gameTypes.GameMetadata{
+					Index:     uint64(i),
+					GameType:  uint32(i),
+					Timestamp: uint64(i),
+					Proxy:     common.Address{byte(i)},
+				})
+			}
+			stubRpc.SetResponse(factoryAddr, methodGameCount, rpcblock.ByHash(blockHash), nil, []interface{}{big.NewInt(gameCount)})
+
+			// GetGamesAtOrAfter walks indices in descending order within a batch, so the
+			// aggregate3 Call3[] and Result[] must be ordered count-1 .. 0 to match.
+			gameAtIndex := factory.abi.Methods[methodGameAtIndex]
+			var call3s []multicall3Call3
+			var results []result3
+			for i := gameCount - 1; i >= 0; i-- {
+				argData, err := gameAtIndex.Inputs.Pack(big.NewInt(int64(i)))
+				require.NoError(t, err)
+				callData := append(slices.Clone(gameAtIndex.ID), argData...)
+				call3s = append(call3s, multicall3Call3{Target: factoryAddr, AllowFailure: false, CallData: callData})
+
+				outData, err := gameAtIndex.Outputs.Pack(allGames[i].GameType, allGames[i].Timestamp, allGames[i].Proxy)
+				require.NoError(t, err)
+				results = append(results, result3{Success: true, ReturnData: outData})
+			}
+			stubRpc.SetResponse(CanonicalMulticall3Address, "aggregate3", rpcblock.ByHash(blockHash),
+				[]interface{}{call3s}, []interface{}{results})
+
+			actualGames, err := factory.GetGamesAtOrAfter(context.Background(), blockHash, 0)
+			require.NoError(t, err)
+
+			// Games come back in descending order.
+			expectedGames := slices.Clone(allGames)
+			slices.Reverse(expectedGames)
+			require.Equal(t, expectedGames, actualGames)
+		})
+	}
+}
+
 func TestGetGameFromParameters(t *testing.T) {
 	for _, version := range factoryVersions {
 		t.Run(version.String(), func(t *testing.T) {

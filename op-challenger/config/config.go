@@ -66,6 +66,8 @@ type Config struct {
 	Datadir              string                  // Data Directory
 	MaxConcurrency       uint                    // Maximum number of threads to use when progressing games
 	PollInterval         time.Duration           // Polling interval for latest-block subscription when using an HTTP RPC provider
+	L1RPCRateLimit       float64                 // Maximum L1 RPC requests per second (0 = unlimited). Smooths the burst of eth_calls issued when loading games.
+	L1Multicall3Address  common.Address          // Address of the L1 Multicall3 contract used to aggregate game-loading eth_calls into a single request (zero = disabled).
 	AllowInvalidPrestate bool                    // Whether to allow responding to games where the prestate does not match
 	MinUpdateInterval    time.Duration           // Minimum duration the L1 head block time must advance before scheduling a new update cycle
 
