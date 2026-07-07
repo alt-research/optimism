@@ -1,4 +1,4 @@
-name: Build op-challenger image
+name: Build OP Stack images
 
 on:
   workflow_dispatch:
@@ -11,21 +11,114 @@ on:
         description: 'Docker image tag (leave empty for <ref>-<short-sha>)'
         required: false
         default: ''
+      images:
+        description: 'Images to build: all or comma-separated bake targets'
+        required: false
+        default: 'all'
 
 env:
   GAR_REGISTRY: us-west1-docker.pkg.dev
   GAR_REPOSITORY: shared-resources-alt/optimism
-  IMAGE_NAME: op-challenger
   PLATFORMS: linux/amd64
 
 concurrency:
-  group: build-op-challenger-${{ github.event.inputs.ref }}
+  group: build-op-stack-images-${{ github.event.inputs.ref }}
   cancel-in-progress: false
 
 jobs:
-  build-push:
-    name: Build and push op-challenger
+  plan:
+    name: Plan image build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      matrix_json: ${{ steps.plan.outputs.matrix_json }}
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+      git_commit: ${{ steps.meta.outputs.git_commit }}
+      git_date: ${{ steps.meta.outputs.git_date }}
+
+    steps:
+      - name: Checkout requested ref
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.inputs.ref }}
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Compute image metadata
+        id: meta
+        env:
+          REF_INPUT: ${{ github.event.inputs.ref }}
+          IMAGE_TAG_INPUT: ${{ github.event.inputs.image_tag }}
+        run: |
+          set -euo pipefail
+
+          git_commit="$(git rev-parse HEAD)"
+          git_date="$(git show -s --format='%ct' HEAD)"
+          short_sha="$(git rev-parse --short=12 HEAD)"
+
+          if [ -n "${IMAGE_TAG_INPUT}" ]; then
+            image_tag="${IMAGE_TAG_INPUT}"
+          else
+            ref_name="${REF_INPUT#refs/heads/}"
+            ref_name="${ref_name#refs/tags/}"
+            safe_ref="$(printf '%s' "${ref_name}" \
+              | tr '/' '-' \
+              | sed -E 's/[^A-Za-z0-9_.-]+/-/g; s/^[.-]+//; s/[.-]+$//')"
+            if [ -z "${safe_ref}" ]; then
+              safe_ref="manual"
+            fi
+            image_tag="${safe_ref}-${short_sha}"
+          fi
+
+          {
+            echo "git_commit=${git_commit}"
+            echo "git_date=${git_date}"
+            echo "image_tag=${image_tag}"
+          } >> "${GITHUB_OUTPUT}"
+
+          echo "Building ref ${git_commit} with image tag ${image_tag}"
+
+      - name: Plan images
+        id: plan
+        env:
+          IMAGES_INPUT: ${{ github.event.inputs.images }}
+        run: |
+          set -euo pipefail
+
+          if [ "${IMAGES_INPUT}" = "all" ] || [ -z "${IMAGES_INPUT}" ]; then
+            matrix_json="$(jq -c '[.images | keys[] | {image_name: .}]' .github/images.json)"
+          else
+            matrix_json="$(printf '%s' "${IMAGES_INPUT}" \
+              | jq -R -c 'split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0)) | map({image_name: .})')"
+          fi
+
+          count="$(printf '%s' "${matrix_json}" | jq 'length')"
+          if [ "${count}" = "0" ]; then
+            echo "No images selected." >&2
+            exit 1
+          fi
+
+          while read -r image_name; do
+            if ! jq -e --arg image_name "${image_name}" '.images[$image_name]' .github/images.json > /dev/null; then
+              echo "Unknown image: ${image_name}" >&2
+              exit 1
+            fi
+          done < <(printf '%s' "${matrix_json}" | jq -r '.[].image_name')
+
+          echo "matrix_json=${matrix_json}" >> "${GITHUB_OUTPUT}"
+          echo "Planned images:"
+          printf '%s' "${matrix_json}" | jq -r '.[].image_name'
+
+  build-push:
+    name: Build and push ${{ matrix.image_name }}
+    needs: plan
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include: ${{ fromJson(needs.plan.outputs.matrix_json) }}
     permissions:
       contents: read
       id-token: write
@@ -55,65 +148,37 @@ jobs:
       - name: Configure Docker for GAR
         run: gcloud auth configure-docker "${GAR_REGISTRY}" --quiet
 
-      - name: Compute image metadata
-        id: meta
-        env:
-          REF_INPUT: ${{ github.event.inputs.ref }}
-          IMAGE_TAG_INPUT: ${{ github.event.inputs.image_tag }}
-        run: |
-          set -euo pipefail
-
-          git_commit="$(git rev-parse HEAD)"
-          git_date="$(git show -s --format='%ct' HEAD)"
-          short_sha="$(git rev-parse --short=12 HEAD)"
-
-          if [ -n "${IMAGE_TAG_INPUT}" ]; then
-            image_tag="${IMAGE_TAG_INPUT}"
-          else
-            ref_name="${REF_INPUT#refs/heads/}"
-            ref_name="${ref_name#refs/tags/}"
-            safe_ref="$(printf '%s' "${ref_name}" \
-              | tr '/' '-' \
-              | sed -E 's/[^A-Za-z0-9_.-]+/-/g; s/^[.-]+//; s/[.-]+$//')"
-            if [ -z "${safe_ref}" ]; then
-              safe_ref="manual"
-            fi
-            image_tag="${safe_ref}-${short_sha}"
-          fi
-
-          image="${GAR_REGISTRY}/${GAR_REPOSITORY}/${IMAGE_NAME}:${image_tag}"
-
-          {
-            echo "git_commit=${git_commit}"
-            echo "git_date=${git_date}"
-            echo "image=${image}"
-            echo "image_tag=${image_tag}"
-          } >> "${GITHUB_OUTPUT}"
-
-          echo "Building ${image} from ${git_commit}"
-
       - name: Build and push image
         env:
+          IMAGE_NAME: ${{ matrix.image_name }}
           REGISTRY: ${{ env.GAR_REGISTRY }}
           REPOSITORY: ${{ env.GAR_REPOSITORY }}
-          IMAGE_TAGS: ${{ steps.meta.outputs.image_tag }}
-          GIT_COMMIT: ${{ steps.meta.outputs.git_commit }}
-          GIT_DATE: ${{ steps.meta.outputs.git_date }}
-          GIT_VERSION: ${{ steps.meta.outputs.image_tag }}
+          IMAGE_TAGS: ${{ needs.plan.outputs.image_tag }}
+          GIT_COMMIT: ${{ needs.plan.outputs.git_commit }}
+          GIT_DATE: ${{ needs.plan.outputs.git_date }}
+          GIT_VERSION: ${{ needs.plan.outputs.image_tag }}
           PLATFORMS: ${{ env.PLATFORMS }}
         run: |
           set -euo pipefail
           docker buildx bake \
             --progress plain \
             --push \
-            --set op-challenger.cache-from=type=gha,scope=op-challenger \
-            --set op-challenger.cache-to=type=gha,scope=op-challenger,mode=max \
+            --set "${IMAGE_NAME}.cache-from=type=gha,scope=${IMAGE_NAME}" \
+            --set "${IMAGE_NAME}.cache-to=type=gha,scope=${IMAGE_NAME},mode=max" \
             -f docker-bake.hcl \
-            op-challenger
+            "${IMAGE_NAME}"
 
-      - name: Verify pushed image
+      - name: Verify pushed image exists
         env:
-          IMAGE: ${{ steps.meta.outputs.image }}
+          IMAGE: ${{ env.GAR_REGISTRY }}/${{ env.GAR_REPOSITORY }}/${{ matrix.image_name }}:${{ needs.plan.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect "${IMAGE}"
+
+      - name: Run op-challenger bundled binaries
+        if: matrix.image_name == 'op-challenger'
+        env:
+          IMAGE: ${{ env.GAR_REGISTRY }}/${{ env.GAR_REPOSITORY }}/${{ matrix.image_name }}:${{ needs.plan.outputs.image_tag }}
         run: |
           set -euo pipefail
           docker pull "${IMAGE}"
@@ -123,7 +188,7 @@ jobs:
 
       - name: Output image
         env:
-          IMAGE: ${{ steps.meta.outputs.image }}
+          IMAGE: ${{ env.GAR_REGISTRY }}/${{ env.GAR_REPOSITORY }}/${{ matrix.image_name }}:${{ needs.plan.outputs.image_tag }}
         run: |
           echo "## Docker image pushed" >> "${GITHUB_STEP_SUMMARY}"
           echo "" >> "${GITHUB_STEP_SUMMARY}"
