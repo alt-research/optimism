@@ -1,0 +1,53 @@
+name: Sync upstream develop
+
+on:
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream-develop
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Fast-forward develop from upstream
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout develop
+        uses: actions/checkout@v5
+        with:
+          ref: develop
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add upstream remote
+        run: git remote add upstream https://github.com/ethereum-optimism/optimism.git
+
+      - name: Fast-forward develop
+        run: |
+          set -euo pipefail
+
+          git fetch upstream develop
+          git fetch origin develop
+          git checkout develop
+
+          ahead="$(git rev-list --count upstream/develop..develop)"
+          if [ "${ahead}" != "0" ]; then
+            echo "origin/develop has ${ahead} commit(s) not in upstream/develop." >&2
+            echo "Refusing to sync automatically because develop is no longer a pure upstream tracking branch." >&2
+            exit 1
+          fi
+
+          git merge --ff-only upstream/develop
+          git push origin develop
+
+      - name: Output result
+        run: |
+          echo "## Synced develop" >> "${GITHUB_STEP_SUMMARY}"
+          echo "" >> "${GITHUB_STEP_SUMMARY}"
+          echo "origin/develop is now at \`$(git rev-parse HEAD)\`." >> "${GITHUB_STEP_SUMMARY}"
