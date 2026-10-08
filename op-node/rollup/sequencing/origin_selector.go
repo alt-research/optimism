@@ -86,6 +86,22 @@ func (los *L1OriginSelector) FindL1Origin(ctx context.Context, l2Head eth.L2Bloc
 		nextOrigin,
 		recoverMode)
 
+	// Direct sequencing can start the next build before the shared event loop
+	// prefetches the inserted head's next origin. In particular, promoting a
+	// cached next origin clears that cache. Do not systematically reuse the
+	// current origin merely because that forkchoice event has not run yet.
+	// Keep this opportunistic lookup bounded; the required drift/recover fetch
+	// below retains its original behavior and all adoption checks stay shared.
+	if err == nil && nextOrigin == (eth.L1BlockRef{}) {
+		fetchCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+		fetched, fetchErr := los.fetch(fetchCtx, currentOrigin.Number+1)
+		cancel()
+		if fetchErr == nil {
+			return los.findL1OriginOfNextL2Block(l2Head, currentOrigin, fetched, recoverMode)
+		}
+		los.log.Debug("Next L1 origin unavailable before sequencing", "number", currentOrigin.Number+1, "err", fetchErr)
+	}
+
 	// If the cache doesn't have the next origin, but we now
 	// know we definitely need it, fetch it and try again.
 	if errors.Is(err, ErrNextL1OriginRequired) {

@@ -95,6 +95,7 @@ func TestOriginSelectorFetchNextError(t *testing.T) {
 	s := NewL1OriginSelector(ctx, log, cfg, l1)
 	s.currentOrigin = a
 
+	l1.ExpectL1BlockRefByNumber(b.Number, eth.L1BlockRef{}, ethereum.NotFound)
 	next, err := s.FindL1Origin(ctx, l2Head)
 	require.Nil(t, err)
 	require.Equal(t, a, next)
@@ -110,6 +111,7 @@ func TestOriginSelectorFetchNextError(t *testing.T) {
 	require.True(t, handled)
 
 	// The next origin should still be `a` because the fetch failed.
+	l1.ExpectL1BlockRefByNumber(b.Number, eth.L1BlockRef{}, errors.New("test error"))
 	next, err = s.FindL1Origin(ctx, l2Head)
 	require.Nil(t, err)
 	require.Equal(t, a, next)
@@ -185,13 +187,13 @@ func TestOriginSelectorAdvances(t *testing.T) {
 			Time:     26,
 		}
 
-		// The origin is still `b` because the next origin has not been fetched yet.
-		requireL1OriginAt(l2Head, b)
-
 		l1.ExpectL1BlockRefByNumber(c.Number, c, nil)
+		// Selection must fetch the available child even if the next forkchoice
+		// event has not been delivered yet.
+		requireL1OriginAt(l2Head, c)
 
 		// Trigger the background fetch via a forkchoice update.
-		// This will actually fetch the next origin because the internal cache is empty.
+		// Selection already warmed the next origin, so this is now a no-op.
 		handled = s.OnEvent(context.Background(), engine.ForkchoiceUpdateEvent{UnsafeL2Head: l2Head})
 		require.True(t, handled)
 
@@ -218,6 +220,7 @@ func TestOriginSelectorAdvances(t *testing.T) {
 			l1.ExpectL1BlockRefByNumber(d.Number, d, nil)
 			requireL1OriginAt(l2Head, d)
 		} else {
+			l1.ExpectL1BlockRefByNumber(d.Number, eth.BlockRef{}, ethereum.NotFound)
 			requireL1OriginAt(l2Head, c)
 		}
 	}
@@ -270,6 +273,7 @@ func TestOriginSelectorHandlesReset(t *testing.T) {
 	// The next origin should be `a` now, but we need to fetch it
 	// because the internal cache was reset.
 	l1.ExpectL1BlockRefByHash(a.Hash, a, nil)
+	l1.ExpectL1BlockRefByNumber(b.Number, eth.L1BlockRef{}, ethereum.NotFound)
 
 	next, err = s.FindL1Origin(ctx, l2Head)
 	require.Nil(t, err)
@@ -277,7 +281,7 @@ func TestOriginSelectorHandlesReset(t *testing.T) {
 }
 
 // TestOriginSelectorFetchesNextOrigin ensures that the origin selector
-// fetches the next origin when a fcu is received and the internal cache is empty
+// fetches the next origin even before a fcu when the internal cache is empty
 //
 // The next L2 time is 26 which is after the next L1 block time. There
 // is no conf depth to stop the origin selection so block `b` will
@@ -309,7 +313,7 @@ func TestOriginSelectorFetchesNextOrigin(t *testing.T) {
 		Time:     24,
 	}
 
-	// This is called as part of the background prefetch job
+	// This is called by the inline readiness fallback.
 	l1.ExpectL1BlockRefByNumber(b.Number, b, nil)
 
 	s := NewL1OriginSelector(ctx, log, cfg, l1)
@@ -317,12 +321,12 @@ func TestOriginSelectorFetchesNextOrigin(t *testing.T) {
 
 	next, err := s.FindL1Origin(ctx, l2Head)
 	require.Nil(t, err)
-	require.Equal(t, a, next)
+	require.Equal(t, b, next)
 
-	// Selection is stable until the next origin is fetched
+	// Selection is stable while the L2 head still uses the previous origin.
 	next, err = s.FindL1Origin(ctx, l2Head)
 	require.Nil(t, err)
-	require.Equal(t, a, next)
+	require.Equal(t, b, next)
 
 	// Trigger the background fetch via a forkchoice update
 	handled := s.OnEvent(context.Background(), engine.ForkchoiceUpdateEvent{UnsafeL2Head: l2Head})
@@ -384,10 +388,10 @@ func TestOriginSelectorHandlesReorg(t *testing.T) {
 		require.ErrorIs(t, err, e)
 	}
 
-	requireFindl1OriginEqual(a)
+	requireFindl1OriginEqual(b)
 
-	// Selection is stable until the next origin is fetched
-	requireFindl1OriginEqual(a)
+	// Selection is stable after the inline readiness fetch.
+	requireFindl1OriginEqual(b)
 
 	// Trigger the background fetch via a forkchoice update
 	handled := s.OnEvent(context.Background(), engine.ForkchoiceUpdateEvent{UnsafeL2Head: l2Head})
@@ -628,6 +632,7 @@ func TestOriginSelector_FjordSeqDrift(t *testing.T) {
 	s := NewL1OriginSelector(ctx, log, cfg, l1)
 	s.currentOrigin = a
 
+	l1.ExpectL1BlockRefByNumber(a.Number+1, eth.L1BlockRef{}, ethereum.NotFound)
 	next, err := s.FindL1Origin(ctx, l2Head)
 	require.NoError(t, err, "with Fjord activated, have increased max seq drift")
 	require.Equal(t, a, next)
