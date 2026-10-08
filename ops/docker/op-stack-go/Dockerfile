@@ -13,6 +13,10 @@ ARG TARGET_BASE_IMAGE=chainguard/static:latest
 # /bin/sh entrypoint, plus a bundled musl loader for the musl-linked cannon embeds.
 ARG CHALLENGER_TARGET_BASE_IMAGE=chainguard/wolfi-base:latest@sha256:02dab76bd852a70556b5b2002195c8a5fdab77d323c433bf6642aab080489795
 
+# Existing sequencer charts use /bin/sh and hostname for P2P advertisement.
+# Keep op-node compatible without changing the default for other client images.
+ARG OP_NODE_TARGET_BASE_IMAGE=chainguard/wolfi-base:latest@sha256:02dab76bd852a70556b5b2002195c8a5fdab77d323c433bf6642aab080489795
+
 # builder_foundry does not need to be built on $BUILDPLATFORM, as foundry produces static binaries.
 FROM alpine:3.21 AS builder_foundry
 
@@ -296,7 +300,7 @@ USER 0
 COPY --from=op-wheel-builder /app/op-wheel/bin/op-wheel /usr/local/bin/
 CMD ["op-wheel"]
 
-FROM $TARGET_BASE_IMAGE AS op-node-target
+FROM $OP_NODE_TARGET_BASE_IMAGE AS op-node-target
 USER 0
 COPY --from=op-node-builder /app/op-node/bin/op-node /usr/local/bin/
 CMD ["op-node"]
