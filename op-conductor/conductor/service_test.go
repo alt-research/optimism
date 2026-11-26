@@ -120,6 +120,8 @@ func (s *OpConductorTestSuite) SetupTest() {
 	s.cons = &consensusmocks.Consensus{}
 	s.hmon = &healthmocks.HealthMonitor{}
 	s.cons.EXPECT().ServerID().Return("SequencerA")
+	s.leaderUpdateCh = make(chan bool, 1)
+	s.cons.EXPECT().LeaderCh().Return(s.leaderUpdateCh)
 
 	conductor, err := NewOpConductor(s.ctx, &s.cfg, s.log, s.metrics, s.version, s.ctrl, s.cons, s.hmon)
 	s.NoError(err)
@@ -129,9 +131,6 @@ func (s *OpConductorTestSuite) SetupTest() {
 	s.healthUpdateCh = make(chan error, 1)
 	s.hmon.EXPECT().Start(mock.Anything).Return(nil)
 	s.conductor.healthUpdateCh = s.healthUpdateCh
-
-	s.leaderUpdateCh = make(chan bool, 1)
-	s.conductor.leaderUpdateCh = s.leaderUpdateCh
 
 	s.err = errors.New("error")
 	s.syncEnabled = false   // default to no sync, turn it on by calling s.enableSynchronization()

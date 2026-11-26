@@ -3,6 +3,7 @@ package health
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -62,6 +63,19 @@ func (s *HealthMonitorTestSuite) SetupMonitor(
 	mockSupervisorHealthAPI SupervisorHealthAPI,
 	elP2pClient client.ElP2PClient,
 ) *SequencerHealthMonitor {
+	monitor := s.newMonitor(now, unsafeInterval, safeInterval, mockRollupClient, mockP2P, mockSupervisorHealthAPI, elP2pClient)
+	s.NoError(monitor.Start(context.Background()))
+	return monitor
+}
+
+// newMonitor builds a stopped monitor so state assertions can run without a background writer.
+func (s *HealthMonitorTestSuite) newMonitor(
+	now, unsafeInterval, safeInterval uint64,
+	mockRollupClient *testutils.MockRollupClient,
+	mockP2P *p2pMocks.API,
+	mockSupervisorHealthAPI SupervisorHealthAPI,
+	elP2pClient client.ElP2PClient,
+) *SequencerHealthMonitor {
 	tp := &timeProvider{now: now}
 	if mockP2P == nil {
 		mockP2P = &p2pMocks.API{}
@@ -92,8 +106,6 @@ func (s *HealthMonitorTestSuite) SetupMonitor(
 			elP2pClient:  elP2pClient,
 		}
 	}
-	err := monitor.Start(context.Background())
-	s.NoError(err)
 	return monitor
 }
 
@@ -149,7 +161,6 @@ func (s *HealthMonitorTestSuite) SetupMonitorWithRollupBoost(
 }
 
 func (s *HealthMonitorTestSuite) TestUnhealthyLowPeerCount() {
-	s.T().Parallel()
 	now := uint64(time.Now().Unix())
 
 	rc := &testutils.MockRollupClient{}
@@ -173,7 +184,6 @@ func (s *HealthMonitorTestSuite) TestUnhealthyLowPeerCount() {
 }
 
 func (s *HealthMonitorTestSuite) TestUnhealthyLowElP2pPeerCount() {
-	s.T().Parallel()
 	now := uint64(time.Now().Unix())
 
 	rc := &testutils.MockRollupClient{}
@@ -200,7 +210,6 @@ func (s *HealthMonitorTestSuite) TestUnhealthyLowElP2pPeerCount() {
 }
 
 func (s *HealthMonitorTestSuite) TestUnhealthyUnsafeHeadNotProgressing() {
-	s.T().Parallel()
 	now := uint64(time.Now().Unix())
 
 	rc := &testutils.MockRollupClient{}
@@ -232,7 +241,6 @@ func (s *HealthMonitorTestSuite) TestUnhealthyUnsafeHeadNotProgressing() {
 }
 
 func (s *HealthMonitorTestSuite) TestUnhealthySafeHeadNotProgressing() {
-	s.T().Parallel()
 	now := uint64(time.Now().Unix())
 
 	rc := &testutils.MockRollupClient{}
@@ -266,7 +274,6 @@ func (s *HealthMonitorTestSuite) TestUnhealthySafeHeadNotProgressing() {
 }
 
 func (s *HealthMonitorTestSuite) TestHealthyWithUnsafeLag() {
-	s.T().Parallel()
 	now := uint64(time.Now().Unix())
 
 	elP2pClient := &clientmocks.ElP2PClient{}
@@ -281,40 +288,37 @@ func (s *HealthMonitorTestSuite) TestHealthyWithUnsafeLag() {
 	// in this case now time is behind unsafe head time, this should still be considered healthy.
 	rc.ExpectSyncStatus(mockSyncStatus(now+5, 2, now, 1), nil)
 
-	monitor := s.SetupMonitor(now, 60, 60, rc, nil, nil, elP2pClient)
-	healthUpdateCh := monitor.Subscribe()
+	monitor := s.newMonitor(now, 60, 60, rc, nil, nil, elP2pClient)
 
 	// confirm initial state
 	s.Zero(monitor.lastSeenUnsafeNum)
 	s.Zero(monitor.lastSeenUnsafeTime)
 
 	// confirm state after first check
-	healthFailure := <-healthUpdateCh
+	healthFailure := monitor.healthCheck(context.Background())
 	s.Nil(healthFailure)
 	lastSeenUnsafeTime := monitor.lastSeenUnsafeTime
 	s.NotZero(monitor.lastSeenUnsafeTime)
 	s.Equal(uint64(1), monitor.lastSeenUnsafeNum)
 
-	healthFailure = <-healthUpdateCh
+	healthFailure = monitor.healthCheck(context.Background())
 	s.Nil(healthFailure)
 	s.Equal(lastSeenUnsafeTime, monitor.lastSeenUnsafeTime)
 	s.Equal(uint64(1), monitor.lastSeenUnsafeNum)
 
-	healthFailure = <-healthUpdateCh
+	healthFailure = monitor.healthCheck(context.Background())
 	s.Nil(healthFailure)
 	s.Equal(lastSeenUnsafeTime+2, monitor.lastSeenUnsafeTime)
 	s.Equal(uint64(2), monitor.lastSeenUnsafeNum)
 
-	healthFailure = <-healthUpdateCh
+	healthFailure = monitor.healthCheck(context.Background())
 	s.Nil(healthFailure)
 	s.Equal(lastSeenUnsafeTime+2, monitor.lastSeenUnsafeTime)
 	s.Equal(uint64(2), monitor.lastSeenUnsafeNum)
 
-	s.NoError(monitor.Stop())
 }
 
 func (s *HealthMonitorTestSuite) TestHealthySupervisor() {
-	s.T().Parallel()
 	now := uint64(time.Now().Unix())
 
 	rc := &testutils.MockRollupClient{}
@@ -335,7 +339,6 @@ func (s *HealthMonitorTestSuite) TestHealthySupervisor() {
 }
 
 func (s *HealthMonitorTestSuite) TestUnhealthySupervisorConnectionDown() {
-	s.T().Parallel()
 	now := uint64(time.Now().Unix())
 
 	rc := &testutils.MockRollupClient{}
@@ -356,7 +359,6 @@ func (s *HealthMonitorTestSuite) TestUnhealthySupervisorConnectionDown() {
 }
 
 func (s *HealthMonitorTestSuite) TestRollupBoostConnectionDown() {
-	s.T().Parallel()
 	now := uint64(time.Now().Unix())
 
 	rc := &testutils.MockRollupClient{}
@@ -382,7 +384,6 @@ func (s *HealthMonitorTestSuite) TestRollupBoostConnectionDown() {
 }
 
 func (s *HealthMonitorTestSuite) TestRollupBoostNotHealthy() {
-	s.T().Parallel()
 	now := uint64(time.Now().Unix())
 
 	rc := &testutils.MockRollupClient{}
@@ -408,7 +409,6 @@ func (s *HealthMonitorTestSuite) TestRollupBoostNotHealthy() {
 }
 
 func (s *HealthMonitorTestSuite) TestRollupBoostPartialStatus() {
-	s.T().Parallel()
 	now := uint64(time.Now().Unix())
 
 	rc := &testutils.MockRollupClient{}
@@ -434,7 +434,6 @@ func (s *HealthMonitorTestSuite) TestRollupBoostPartialStatus() {
 }
 
 func (s *HealthMonitorTestSuite) TestRollupBoostPartialStatusWithTolerance() {
-	s.T().Parallel()
 	now := uint64(time.Now().Unix())
 
 	rc := &testutils.MockRollupClient{}
@@ -475,6 +474,8 @@ func (s *HealthMonitorTestSuite) TestRollupBoostPartialStatusWithTolerance() {
 	healthUpdateCh := monitor.Subscribe()
 
 	s.Eventually(func() bool {
+		timeBoundedRotatingCounter.mut.RLock()
+		defer timeBoundedRotatingCounter.mut.RUnlock()
 		return len(timeBoundedRotatingCounter.temporalCache) == 1000
 	}, time.Second*3, time.Second*1)
 
@@ -500,7 +501,6 @@ func (s *HealthMonitorTestSuite) TestRollupBoostPartialStatusWithTolerance() {
 }
 
 func (s *HealthMonitorTestSuite) TestRollupBoostHealthy() {
-	s.T().Parallel()
 	now := uint64(time.Now().Unix())
 	numSecondsToWait := interval + 1
 
@@ -530,7 +530,6 @@ func (s *HealthMonitorTestSuite) TestRollupBoostHealthy() {
 }
 
 func (s *HealthMonitorTestSuite) TestRollupBoostNilClient() {
-	s.T().Parallel()
 	now := uint64(time.Now().Unix())
 
 	rc := &testutils.MockRollupClient{}
@@ -554,7 +553,6 @@ func (s *HealthMonitorTestSuite) TestRollupBoostNilClient() {
 }
 
 func (s *HealthMonitorTestSuite) TestElP2pHealthy() {
-	s.T().Parallel()
 	now := uint64(time.Now().Unix())
 	numSecondsToWait := interval + 1
 
@@ -587,7 +585,6 @@ func (s *HealthMonitorTestSuite) TestElP2pHealthy() {
 }
 
 func (s *HealthMonitorTestSuite) TestElP2pHealthyNilClient() {
-	s.T().Parallel()
 	now := uint64(time.Now().Unix())
 	numSecondsToWait := interval + 1
 
@@ -631,10 +628,13 @@ func TestHealthMonitor(t *testing.T) {
 }
 
 type timeProvider struct {
+	mu  sync.Mutex
 	now uint64
 }
 
 func (tp *timeProvider) Now() uint64 {
+	tp.mu.Lock()
+	defer tp.mu.Unlock()
 	now := tp.now
 	tp.now++
 	return now

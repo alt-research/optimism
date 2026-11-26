@@ -51,6 +51,10 @@ func testSetMaxDASize(t *testing.T, compliantSequencer bool, sequencerDown bool)
 
 	logger, logs := testlog.CaptureLogger(t, slog.LevelDebug)
 
+	// The constructor subscribes to leader updates even in this proxy-only fixture.
+	consensus := &consensusmocks.Consensus{}
+	consensus.EXPECT().LeaderCh().Return(nil)
+
 	conductor, err := NewOpConductor(
 		ctx,
 		&config,
@@ -58,7 +62,7 @@ func testSetMaxDASize(t *testing.T, compliantSequencer bool, sequencerDown bool)
 		&metrics.NoopMetricsImpl{},
 		"test-version",
 		&clientmocks.SequencerControl{}, // not used in this test
-		&consensusmocks.Consensus{},     // not used in this test
+		consensus,                       // no leadership changes in this test
 		&healthmocks.HealthMonitor{},    // not used in this test
 	)
 	require.NoError(t, err)
